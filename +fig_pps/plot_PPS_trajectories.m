@@ -18,7 +18,7 @@ idx_good = ~idx_not_reach_bottom & ~idx_too_much_wheel;
     % 
     % idx_rewarded = [behav_data(:).rewarded] == 1;
 
-edge = [-EXP_CONFIG(1).SCREEN_WIDTH_CM/2 : EXP_CONFIG(1).CIRCLE_RADIUS_CM/2: EXP_CONFIG(1).SCREEN_WIDTH_CM/2];
+edge = [-EXP_CONFIG(1).SCREEN_WIDTH_CM/2 : 1.5: EXP_CONFIG(1).SCREEN_WIDTH_CM/2];
 
 gcf = figure;
 set(gcf,'unit','normalized','position',[0,0,1,1])
@@ -52,34 +52,16 @@ idx_rewarded_initial_out        = find(idx_good & idx_rewarded & ~idx_initialIN)
 idx_nonrewarded_initial_out     = find(idx_good & ~idx_rewarded & ~idx_initialIN);
 
 subplot(2,4,5);
-plot_ball_trajectories(behav_data, idx_rewarded_initial_in, EXP_CONFIG, 'Initial in, rewarded')
+fig_pps.plot_ball_trajectories(behav_data, idx_rewarded_initial_in, EXP_CONFIG, 'Initial in, rewarded')
 subplot(2,4,6);
-plot_ball_trajectories(behav_data, idx_nonrewarded_initial_in, EXP_CONFIG, 'Initial in, non-rewarded')
+fig_pps.plot_ball_trajectories(behav_data, idx_nonrewarded_initial_in, EXP_CONFIG, 'Initial in, non-rewarded')
 subplot(2,4,7);
-plot_ball_trajectories(behav_data, idx_rewarded_initial_out, EXP_CONFIG, 'Initial out, rewarded')
+fig_pps.plot_ball_trajectories(behav_data, idx_rewarded_initial_out, EXP_CONFIG, 'Initial out, rewarded')
 subplot(2,4,8);
-plot_ball_trajectories(behav_data, idx_nonrewarded_initial_out, EXP_CONFIG, 'Initial out, non-rewarded')
+fig_pps.plot_ball_trajectories(behav_data, idx_nonrewarded_initial_out, EXP_CONFIG, 'Initial out, non-rewarded')
 sgtitle([EXP_CONFIG(1).MOUSE_NAME,'-',EXP_CONFIG(1).EXP_DATE],'fontsize',18,'fontweight','bold','interpreter','none');
 saveas(gcf, fig_save_name)
 close
 
 end
 
-function plot_ball_trajectories(behav_data, idx_plot, EXP_CONFIG, titleStr)
-
-hold on
-for i = 1:numel(idx_plot)
-    plot(behav_data(idx_plot(i)).x_rel_cm, behav_data(idx_plot(i)).y_cm)
-end
-xlim([-EXP_CONFIG(1).SCREEN_WIDTH_CM / 2, EXP_CONFIG(1).SCREEN_WIDTH_CM / 2])
-set(gca,'fontsize',16);
-xlabel('x-pos-cm'); ylabel('y-pos-cm');
-title(sprintf('%s: %d/%d', titleStr, numel(idx_plot), numel(behav_data)));
-
-
-line([EXP_CONFIG(1).tolerant_space_cm(1), EXP_CONFIG(1).tolerant_space_cm(1)], [0, EXP_CONFIG(1).CIRCLE_RADIUS_CM], ...
-    'linestyle','--','color','red','linewidth',1.5);
-line([EXP_CONFIG(1).tolerant_space_cm(2), EXP_CONFIG(1).tolerant_space_cm(2)], [0, EXP_CONFIG(1).CIRCLE_RADIUS_CM], ...
-    'linestyle','--','color','red','linewidth',1.5);
-
-end

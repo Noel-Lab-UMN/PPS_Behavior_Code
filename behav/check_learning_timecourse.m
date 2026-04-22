@@ -2,7 +2,9 @@ clear all
 clc
 close all
 %%%% This script loads preprocessed data for each animal and plots the
-%%%% learning trajectores of some behavioral features
+%%%% learning trajectores of some behavioral features:
+%%% (1) percent of correct (2) percent of movement (3) correlation between
+%%% initial position and delta_x
 %%
 subjectCode = 'LSZ_practice_5_violet';
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
@@ -98,10 +100,10 @@ figure
 set(gcf,'Units','inches','Position', [0,0,8,12])
 subplot(3,1,1); hold on
 %%% percent_reward_time bin
-h(1) = plot_sessions_timecourse(behav_results_summary, 'percent_reward_timebin', session_list);
+h(1) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_reward_timebin', session_list);
 ylabel('Percent rewarded');
 yyaxis right
-h(2) = plot_sessions_timecourse(behav_results_summary, 'percent_reward_initialOut_timebin', session_list);
+h(2) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_reward_initialOut_timebin', session_list);
 chance_level_null   = [behav_results_summary(:).chance_level_null];
 h(3) = plot([1:nSession], chance_level_null,'linewidth',1.5,'linestyle','--','color','black');
 legend(h, 'All trials','Initial Out trials','Null level')
@@ -109,16 +111,16 @@ legend(h, 'All trials','Initial Out trials','Null level')
 
 %%%% reward rate time bin
 subplot(3,1,2)
-plot_sessions_timecourse(behav_results_summary, 'reward_rate_timebin', session_list);
+fig_pps.plot_sessions_timecourse(behav_results_summary, 'reward_rate_timebin', session_list);
 ylabel('Reward rate (uL/s)')
 
 subplot(3,1,3); hold on
 %%%% ratio time bin
-h(1) = plot_sessions_timecourse(behav_results_summary, 'reward_out_in_ratio_timebin', session_list);
+h(1) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'reward_out_in_ratio_timebin', session_list);
 ylabel('Ratio')
 %%%% normalized ratio time bin
 yyaxis right
-h(2) = plot_sessions_timecourse(behav_results_summary, 'reward_out_in_ratio_normalized_timebin', session_list);
+h(2) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'reward_out_in_ratio_normalized_timebin', session_list);
 legend(h, 'Raw','Normalized')
 title('Initial Out/In ratio (rewarded trials)')
 
@@ -130,24 +132,24 @@ close
 figure
 set(gcf,'Units','inches','Position', [0,0,8,12])
 subplot(3,1,1); hold on
-h(1) = plot_sessions_timecourse(behav_results_summary, 'percent_goal_directed_all', session_list);
+h(1) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_goal_directed_all', session_list);
 yyaxis right
-h(2) = plot_sessions_timecourse(behav_results_summary, 'percent_static_all', session_list);
+h(2) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_static_all', session_list);
 title('All good trials')
 legend('Goal directed','Static')
 
 subplot(3,1,2); hold on
-h(1) = plot_sessions_timecourse(behav_results_summary, 'percent_goal_directed_initialIN', session_list);
+h(1) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_goal_directed_initialIN', session_list);
 yyaxis right
-h(2) = plot_sessions_timecourse(behav_results_summary, 'percent_static_initialIN', session_list);
+h(2) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_static_initialIN', session_list);
 title('InitialIN good trials')
 legend('Goal directed','Static')
 
 
 subplot(3,1,3); hold on
-h(1) = plot_sessions_timecourse(behav_results_summary, 'percent_goal_directed_initialOUT', session_list);
+h(1) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_goal_directed_initialOUT', session_list);
 yyaxis right
-h(2) = plot_sessions_timecourse(behav_results_summary, 'percent_static_initialOUT', session_list);
+h(2) = fig_pps.plot_sessions_timecourse(behav_results_summary, 'percent_static_initialOUT', session_list);
 title('InitialOUT good trials')
 legend('Goal directed','Static');
 
@@ -187,18 +189,6 @@ h = plot([1:nSession], r_all, '-o','LineWidth',2);
 for n = 1:numel(p_all)
     text(n, r_all(n) + 0.01, util_pps.p2star(p_all(n)),'fontsize',16);
 end
-set(gca,'xtick',[1:nSession],'xticklabels',session_list)
-set(gca,'fontsize',16);
-box off
-end
-function h = plot_sessions_timecourse(behav_results_summary, fieldname, session_list)
-nSession = numel(session_list);
-eval(sprintf('y_all = {behav_results_summary(:).%s};',  fieldname));
-y_avg = cellfun(@mean, y_all);
-y_std = cellfun(@std, y_all);
-n_sample = cellfun(@numel, y_all);
-y_sem = y_std ./ sqrt(n_sample);
-h = errorbar([1:nSession], y_avg, y_sem,'LineWidth',2);
 set(gca,'xtick',[1:nSession],'xticklabels',session_list)
 set(gca,'fontsize',16);
 box off

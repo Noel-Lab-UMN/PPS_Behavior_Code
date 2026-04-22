@@ -70,7 +70,7 @@ function percent_move = get_percent_movement(behav_data, doPlot, EXP_CONFIG)
         is_goal_directed        = cat(1,tmp{:});
         
         
-        edges = [0 : EXP_CONFIG(1).CIRCLE_RADIUS_CM: EXP_CONFIG(1).SCREEN_WIDTH_CM/2];
+        edges = [0 : 1.5: EXP_CONFIG(1).SCREEN_WIDTH_CM/2];
         [~,~,idx_bin] = histcounts(x_abs_rel_cm_good, edges);
         idx_bin_list = unique(idx_bin);
         y_mean = 100 * arrayfun(@(n)mean(is_goal_directed(idx_bin == n) == 1), idx_bin_list);

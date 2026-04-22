@@ -7,11 +7,12 @@ close all
 global PPS_global
 generate_PPS_global()
 %% experiment date and subject code
-subjectCode = 'LSZ_practice_3_green';
-do_replace    = false; 
-doPlot      = true;
+subjectCode = 'LSZ_practice_5_violet';
+do_replace    = true; 
+doPlot      = false;
 
-eval(sprintf('session_list = PPS_global.%s.session_list;',subjectCode));
+eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
+%session_list = {'20260402'};
 
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
 if ~isfolder(save_folder)
@@ -30,7 +31,7 @@ end
         continue
     end
     %% read the json file and the csv file
-    meta_folder = fullfile('../../meta_data/', [subjectCode,'_',exp_date]);
+    meta_folder = fullfile('../../meta_data_local/', [subjectCode,'_',exp_date]);
     EXP_CONFIG = util_pps.read_json_config(meta_folder, subjectCode, exp_date);
     behav_data = util_pps.read_csv_behav_data(meta_folder, EXP_CONFIG);
     
@@ -49,18 +50,22 @@ end
     
     [percent_pps,percent_pps_timebin] = util_pps.get_probs_pps(behav_data, doPlot, EXP_CONFIG);
 
+  
     %%%% Percent of goal-directed, anti-goal-directed, and static
     percent_move = util_pps.get_percent_movement(behav_data, doPlot, EXP_CONFIG);
 
     %%%% correlation between initial positions and delta_x 
     corr_initial_delta = util_pps.get_corr_initial_position_delta_x(behav_data, doPlot, EXP_CONFIG);
+    
+    %%%% get "chance level"
+    nPermute = 100;
+    permute_chance_level = util_pps.get_chance_level_permute(behav_data, EXP_CONFIG, nPermute);
 
-
-    behav_results.percent_pps            = percent_pps;
+    behav_results.percent_pps           = percent_pps;
     behav_results.percent_pps_timebin   = percent_pps_timebin;
     behav_results.percent_move          = percent_move;
     behav_results.corr_initial_delta    = corr_initial_delta;
-    
+    behav_results.permute_chance_level  = permute_chance_level;
     
     save(results_save_name,'behav_results','EXP_CONFIG');
 

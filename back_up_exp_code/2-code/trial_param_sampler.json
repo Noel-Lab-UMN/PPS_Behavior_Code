@@ -1,0 +1,1 @@
+{"chunk_size": 1500, "spawn_distribution": "gaussian", "spawn_gauss_center_list": [-15.0, -10.0, 10.0, 15.0], "spawn_gauss_sigma_cm": 0, "spawn_gauss_clamp_to_screen": true, "spawn_uniform_range": [-15.0, 15.0], "spawn_x_chunk": 

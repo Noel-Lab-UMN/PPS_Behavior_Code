@@ -94,12 +94,18 @@ function percent_pps = calcu_probs(behav_data, idx, EXP_CONFIG)
     idx_good = ~idx_not_reach_bottom & ~idx_too_much_wheel;
     p_good   = sum(idx_good) / nTotal;
     
+    %%%%% idx of moved trials
+    %%%% d
+    is_moved = [behav_data(idx).is_moved];
+   
     is_rewarded = [behav_data(idx).rewarded] == 1;
     
     is_initial_in_reward     = [behav_data(idx).initial_in_reward] == 1;
-    
-    
+    initial_x_rel_cm         = [behav_data(idx).initial_x_rel_cm];
+     
+    p_moved = sum(is_moved) / nTotal;
     p_reward = sum(is_rewarded) / nTotal;
+    p_reward_moved = sum(is_rewarded & is_moved) /sum(is_moved);
     p_intialIN = sum(is_initial_in_reward) / nTotal;
     
     %%% P(reward|intial_in_reward)
@@ -107,23 +113,36 @@ function percent_pps = calcu_probs(behav_data, idx, EXP_CONFIG)
     %%% P(reward|initial_out_reward)
     p_reward_initalOUT = sum(is_rewarded & ~is_initial_in_reward) / sum(~is_initial_in_reward);
     
+    %%% P(reward|initial_out_reward, left side of the screen)
+    is_initial_left = ~is_initial_in_reward & initial_x_rel_cm < 0;
+    p_reward_initialOUT_left = sum(is_rewarded & is_initial_left) / sum(is_initial_left);
+
+    %%% P(reward|initial_out_reward, right side of the screen)
+    is_initial_right = ~is_initial_in_reward & initial_x_rel_cm > 0;
+    p_reward_initialOUT_right = sum(is_rewarded & is_initial_right) / sum(is_initial_right);
+
+
     %%%  P(initial_in|rewarded)
     p_initialIN_reward = sum(is_rewarded & is_initial_in_reward) / sum(is_rewarded);
     %%%% P(initial_out|rewarded)
     p_initialOUT_reward = sum(is_rewarded & ~is_initial_in_reward) / sum(is_rewarded);
     
-    percent_pps.p_good                 = 100 * p_good;
-    percent_pps.p_reward               = 100 * p_reward;
-    percent_pps.p_intialIN             = 100 * p_intialIN;
-    percent_pps.p_reward_initialIN     = 100 * p_reward_initialIN;
-    percent_pps.p_reward_initialOUT    = 100 * p_reward_initalOUT;
-    percent_pps.p_initialIN_reward     = 100 * p_initialIN_reward;
-    percent_pps.p_initialOUT_reward    = 100 * p_initialOUT_reward;
+    percent_pps.p_good                  = 100 * p_good;
+    percent_pps.p_moved                 = 100 * p_moved;
+    percent_pps.p_reward                = 100 * p_reward;
+    percent_pps.p_reward_moved          = 100 * p_reward_moved;
+    percent_pps.p_intialIN              = 100 * p_intialIN;
+    percent_pps.p_reward_initialIN      = 100 * p_reward_initialIN;
+    percent_pps.p_reward_initialOUT     = 100 * p_reward_initalOUT;
+    percent_pps.p_initialIN_reward      = 100 * p_initialIN_reward;
+    percent_pps.p_initialOUT_reward     = 100 * p_initialOUT_reward;
 
+    percent_pps.p_reward_initialOUT_left    = 100 * p_reward_initialOUT_left;
+    percent_pps.p_reward_initialOUT_right   = 100 * p_reward_initialOUT_right;
     %%%% calculate reward rate: ul per second
 
-    start_time = arrayfun(@(x)x.t_global_s(1), behav_data(idx));
-    T = max(start_time) - min(start_time);
-    percent_pps.reward_rate             = sum(is_rewarded) * EXP_CONFIG(1).REWARD_TARGET / T; 
+    %start_time = arrayfun(@(x)x.t_global_s(1), behav_data(idx));
+  %  T = max(start_time) - min(start_time);
+   % percent_pps.reward_rate             = sum(is_rewarded) * EXP_CONFIG(1).REWARD_TARGET / T; 
 
 end
