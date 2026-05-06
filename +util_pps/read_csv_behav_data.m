@@ -11,22 +11,39 @@ behav_data = struct();
 N_exist = 0;
 for k = 1:numel(EXP_CONFIG)
     csv_filename = sprintf('sync_log_%s_%s_%s.csv',EXP_CONFIG(k).MOUSE_NAME, EXP_CONFIG(k).EXP_DATE, EXP_CONFIG(k).START_TIME_MIN);
-    if ~isfile(csv_filename)
+    if ~isfile(fullfile(meta_folder,csv_filename))
         csv_filename = sprintf('sync_log_pps_behav_%s_%s_%s.csv',EXP_CONFIG(k).MOUSE_NAME, EXP_CONFIG(k).EXP_DATE, EXP_CONFIG(k).START_TIME_MIN);
     end
-    raw_data = readtable(fullfile(meta_folder, csv_filename));
+    
+ 
+    opts = detectImportOptions(fullfile(meta_folder, csv_filename));
+    opts = setvartype(opts, "slot1", "string");  % or "char"
+    
+    opts = setvartype(opts, "t_global_s", "double");
+    opts = setvaropts(opts, "t_global_s", "TreatAsMissing", {'NA','NaN','nan','missing'});
+
+    raw_data = readtable(fullfile(meta_folder, csv_filename), opts);
+
+    %raw_data = readtable(fullfile(meta_folder, csv_filename));
     raw_data = read_slot(raw_data);
 
     %%% split based on ball ID
     ball_list = unique(raw_data.slot1_spawn_id(~isnan(raw_data.slot1_spawn_id)));
     nBall = numel(ball_list);
     
-
-
-    for i = 1:numel(ball_list)
+    %%%%% 
+    % Remove the first ball in each csv file due to some bug in the
+    % experimental code. But this code was fixed starting from 20260423
+    %%%%% 
+    if datetime(EXP_CONFIG(k).EXP_DATE,'inputformat','yyyyMMdd') >= datetime('20260423','inputformat','yyyyMMdd')
+        start_id = 1;
+    else
+        start_id = 2;
+    end
+    for i = start_id:numel(ball_list)
         idx = raw_data.slot1_spawn_id == ball_list(i);
 
-        n = i + N_exist;
+        n = i  - (start_id - 1) + N_exist ;
         %%%% basic info, subject code, exp_date
         behav_data(n).mouse_name    =  EXP_CONFIG.MOUSE_NAME;
         behav_data(n).exp_date      =  EXP_CONFIG.EXP_DATE;
@@ -58,7 +75,18 @@ for k = 1:numel(EXP_CONFIG)
         if numel(gain_list_vals) > 1
             behav_data(n).wheel_gain = gain_list_vals(2);
             behav_data(n).wheel_jitter = gain_list_vals(3);
+        
+        
+            behav_data(n).delta_ticks = raw_data.delta_ticks_corrected(idx);
+            %%%%% this is without the jitteing. how much it would move if just
+            %%%%% tick * gain
+            behav_data(n).delta_cm_no_jitter = behav_data(n).delta_ticks * behav_data(n).wheel_gain;
+            %%%%% this is how much it actually moved
+            behav_data(n).delta_cm_jitter = raw_data.base_delta_cm(idx);
+            behav_data(n).jitter_only = behav_data(n).delta_cm_jitter - behav_data(n).delta_cm_no_jitter;
         end
+
+
 
         behav_data(n).frame_idx     = raw_data.frame_idx(idx);
         behav_data(n).t_global_s    = raw_data.t_global_s(idx);
@@ -77,9 +105,14 @@ for k = 1:numel(EXP_CONFIG)
         %behav_data(n).x_rel_deg         = x_rel_deg_tmp;
         behav_data(n).x_rel_cm          = x_rel_deg_tmp * (EXP_CONFIG(k).SPACE_WIDTH_CM / EXP_CONFIG(k).SPACE_DEGREES);
         behav_data(n).y_cm              = raw_data.slot1_y_cm(idx); 
-        behav_data(n).delta_hori_cm     = raw_data.delta_cm(idx); %%%% 
+        behav_data(n).delta_hori_cm     = raw_data.delta_cm(idx); %%%% this is wheel only
+
         %behav_data(n).delta_hori_deg    = behav_data(n).delta_hori_cm  * (EXP_CONFIG(k).SPACE_DEGREES / EXP_CONFIG(k).SPACE_WIDTH_CM); 
-       
+        
+        %%%% extract random walk: delta_x - delta_cm_wheel
+        behav_data(n).x_random_walk     = behav_data(n).x_rel_cm - behav_data(n).delta_hori_cm;
+
+
         if isfield(EXP_CONFIG(k), 'CIRCLE_RADIUS_CM')
             radius = EXP_CONFIG(k).CIRCLE_RADIUS_CM;
         elseif isfield(behav_data(n), 'ball_radius')
@@ -150,7 +183,7 @@ for k = 1:numel(EXP_CONFIG)
         end
     
         %%%%%%% minimal effort to get ball into reward zone
-        behav_data(n).minimal_effort = min(abs(behav_data(n).initial_x_rel_cm - EXP_CONFIG(k).tolerant_space_cm));
+       % behav_data(n).minimal_effort = min(abs(behav_data(n).initial_x_rel_cm - EXP_CONFIG(k).tolerant_space_cm));
         
     
         %%%%%% How much the ball moved totally
@@ -158,7 +191,11 @@ for k = 1:numel(EXP_CONFIG)
         behav_data(n).sum_abs_delta_hori_cm     = sum(abs(behav_data(n).delta_hori_cm));
         %behav_data(n).sum_delta_hori_deg        = sum(behav_data(n).delta_hori_deg);
         %behav_data(n).sum_abs_delta_hori_deg    = sum(abs(behav_data(n).delta_hori_deg));
-        behav_data(n).is_moved                  =  behav_data(n).sum_abs_delta_hori_cm >= behav_data(n).minimal_effort;
+        %behav_data(n).is_moved                  =  behav_data(n).sum_abs_delta_hori_cm >= behav_data(n).minimal_effort;
+
+        %%%%% By shizhao liu 04/22, use a threshold to determine if balls are
+        %%%%% moved
+        behav_data(n).is_moved                  =  behav_data(n).sum_abs_delta_hori_cm >= EXP_CONFIG(k).MOVEMENT_THRESHOLD;
     
         %%%% whether the movement is goal directed: i.e. toward the center
         %%%% if these two variables are opposite signs, it is goal-directed

@@ -13,7 +13,9 @@ for n = 1:numel(session_list)
     behav_results_summary(n).p_reward_moved             = behav_results.percent_pps.p_reward_moved; 
     behav_results_summary(n).p_reward_initialOUT_left   = behav_results.percent_pps.p_reward_initialOUT_left;
     behav_results_summary(n).p_reward_initialOUT_right  = behav_results.percent_pps.p_reward_initialOUT_right;
-
+    
+    %%%%% base line MAD: half of reward zone
+    behav_results_summary(n).MAD_baseline = EXP_CONFIG(1).tolerant_space_cm(2) / 2;
 
     %%% Mean absoulate distance to the center
     %%% check how centralized the end points are

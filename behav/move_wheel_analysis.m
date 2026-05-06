@@ -3,7 +3,7 @@ clc
 close all
 
 %%
-subjectCode = 'GD_4_mint';
+subjectCode = 'GD_3_pink';
 %exp_date     = '20260406';
 exp_date_list = {'20260331';'20260401';'20260402';'20260403';'20260406';'20260407';'20260408'};
 nSession = numel(exp_date_list);
@@ -35,8 +35,16 @@ for k = 1:numel(exp_date_list)
     % running_avg = movmean(abs_velo_cm, [1 0], 'SamplePoints', t_global_s(2:end));
     % running_avg = running_avg(running_avg ~= 0);
     % median_running_avg(k) = prctile(running_avg, 50);
+    idx_left = raw_data_all.delta_cm < 0;
+    idx_right = raw_data_all.delta_cm > 0;
+    delta_x_left(k) = sum(abs(raw_data_all.delta_cm(idx_left)));
+    delta_x_right(k) = sum(abs(raw_data_all.delta_cm(idx_right)));
 end
 figure;  hold on
 plot(running_avg_prctiles(:,1),'-o');
 plot(running_avg_prctiles(:,2),'-o');
 plot(running_avg_min, '-o')
+
+figure; hold on
+plot(delta_x_left, '-o');
+plot(delta_x_right,'--o');

@@ -70,12 +70,12 @@ default_exp_config = load_json(EXP_CONFIG_PATH)
 config_all = deep_update(hardware_config, default_exp_config)
 
 ANIMAL_CONFIG_PATH = os.path.join(home_path, f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_pps_passive_replay.json")
-if os.path.exists(ANIMAL_CONFIG_PATH):
-    animal_config = load_json(ANIMAL_CONFIG_PATH)
-    config_all = deep_update(config_all, animal_config)
-    print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
-else:
-    print(f"[WARNING] {ANIMAL_CONFIG_PATH} not found. Using default parameters only.")
+#if os.path.exists(ANIMAL_CONFIG_PATH):
+animal_config = load_json(ANIMAL_CONFIG_PATH)
+config_all = deep_update(config_all, animal_config)
+print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
+# else:
+#     print(f"[WARNING] {ANIMAL_CONFIG_PATH} not found. Using default parameters only.")
 
 
 rig_conf                    = config_all["hardware"]
@@ -446,7 +446,7 @@ def parse_sync_log(csv_file_name, column_name='slot_1', X_UNIT = X_UNIT, file_id
                     ball_data['x_cm']          = ball_data['x_cm'].astype(float)
              # convert types
             
-            ball_data['opacity']        = ball_data['opacity'].astype(bool)
+            ball_data['opacity']        = ball_data['opacity'].astype(float)
     
     ball_data['spawn_id']       = ball_data['spawn_id'].astype(int)
     ball_data['y_cm']           = ball_data['y_cm'].astype(float)
@@ -492,9 +492,9 @@ def deg_to_screen_cm(deg, space_cm = SPACE_WIDTH_CM):
     d_cm = d / SPACE_DEGREES * space_cm
     return d_cm
 
-def run_inter_spawn_interval(win, inter_spawn_interval = INTER_SPAWN_INTERVAL):
-    win.flip(clearBuffer=True)
-    time.sleep(inter_spawn_interval)
+# def run_inter_spawn_interval(win, inter_spawn_interval = INTER_SPAWN_INTERVAL):
+#     win.flip(clearBuffer=True)
+#     time.sleep(inter_spawn_interval)
 
 # def wait_for_stationary_and_log_between_spawns(
 #         win, encoder, sync_writer, sync_f, frame_idx, reward_state_pulse_pending,
@@ -536,7 +536,9 @@ def wait_for_stationary_and_log_between_spawns():
             reward_state_pulse_pending = False
         else:
             reward_state_now = 1 if (perf_counter() < reward_active_until) else 0
-        
+            
+        if sync_start_ts is None:
+            sync_start_ts = perf_counter()
         t_global = f"{(perf_counter() - sync_start_ts):.6f}"
 
         reward_amount = 0   
@@ -578,6 +580,9 @@ def wait_for_stationary_and_log_between_spawns():
             core.wait(to_wait)
         
         if perf_counter() - interval_start_ts > INTER_SPAWN_INTERVAL and wheel_is_stationary:
+            if DO_EPHYS:
+                #### send pulse when this ball apprears on the screen
+                win.callOnFlip(send_trial_pulse_hw_nonblocking)
             break
 
     return frame_idx, reward_state_pulse_pending
@@ -784,10 +789,10 @@ else:
     continue_replay = False
 
 if continue_replay:
-    spawn_idx = int(resume_state["spawn_idx"])
+    spawn_idx = int(resume_state["spawn_idx"]) - 1
     print(f"[INFO] Resuming from spawn_idx={spawn_idx}")
 else:
-    spawn_idx = 0
+    spawn_idx = -1
 
     print(f"[INFO] Starting from spawn_idx={spawn_idx}")
 
@@ -795,7 +800,7 @@ row_ptr = 0
 spawn_id, spawn_rows = spawn_groups[spawn_idx]
 spawn_rows = list(spawn_rows.itertuples(index=False))
 
-new_spawn_flag = False
+new_spawn_flag = True
 
 reward_active_until = 0.0
 reward_state_pulse_pending = False
@@ -830,11 +835,32 @@ if DO_EPHYS:
 try: 
     reference_ticks = int(encoder.current_position())
     while True:
+        if new_spawn_flag:
+            #frame_idx, reward_state_pulse_pending = wait_for_stationary_and_log_between_spawns(win, encoder, sync_writer, sync_f, frame_idx,reward_state_pulse_pending, sync_start_ts) 
+            wait_for_stationary_and_log_between_spawns()
+            spawn_idx += 1
+            ### save replay state each time we finish replaying a ball
+            save_replay_state(
+                REPLAY_STATE_FILENAME,
+                spawn_idx,
+                csv_filename_list
+            )
+            
+            if spawn_idx > len(spawn_groups):
+                break   # experiment finished
+
+            spawn_id, spawn_rows = spawn_groups[spawn_idx]
+            spawn_rows = list(spawn_rows.itertuples(index=False))
+            row_ptr = 0
+            new_spawn_flag = False
+
+            if RUNTIME_TIMEOUT_MINUTES and RUNTIME_TIMEOUT_MINUTES > 0:
+                if (perf_counter() - experiment_start_ts) > (RUNTIME_TIMEOUT_MINUTES * 60.0):
+                    print("[INFO] Runtime timeout reached — exiting.", flush=True)
+                    break
+
         #### Record current time
-        if RUNTIME_TIMEOUT_MINUTES and RUNTIME_TIMEOUT_MINUTES > 0:
-            if (perf_counter() - experiment_start_ts) > (RUNTIME_TIMEOUT_MINUTES * 60.0):
-                print("[INFO] Runtime timeout reached — exiting.", flush=True)
-                break
+      
             
         reward_sent_this_frame = False
         frame_loop_start  = perf_counter()
@@ -902,9 +928,9 @@ try:
             # pause between spawns
         
             new_spawn_flag = True
-            if DO_EPHYS:
-                #### send pulse when this ball apprears on the screen
-                win.callOnFlip(send_trial_pulse_hw_nonblocking)
+            # if DO_EPHYS:
+            #     #### send pulse when this ball apprears on the screen
+            #     win.callOnFlip(send_trial_pulse_hw_nonblocking)
             
 
         
@@ -942,7 +968,7 @@ try:
 
         # append to rows
         slot_cells = ['']
-        slot_cells[0] = f"{spawn_id}|{drawn_x:.3f}|{y_cm:.3f}|1|{ball_radius:.1f}"
+        slot_cells[0] = f"{spawn_id}|{drawn_x:.3f}|{y_cm:.3f}|{ball_opacity:.3f}|{ball_radius:.1f}"
         log_row += enc_cols
         log_row += slot_cells
                    
@@ -963,24 +989,7 @@ try:
         if to_wait > 0:
             core.wait(to_wait)
         
-        if new_spawn_flag:
-            #frame_idx, reward_state_pulse_pending = wait_for_stationary_and_log_between_spawns(win, encoder, sync_writer, sync_f, frame_idx,reward_state_pulse_pending, sync_start_ts) 
-            wait_for_stationary_and_log_between_spawns()
-            spawn_idx += 1
-            ### save replay state each time we finish replaying a ball
-            save_replay_state(
-                REPLAY_STATE_FILENAME,
-                spawn_idx,
-                csv_filename_list
-            )
-            
-            if spawn_idx >= len(spawn_groups):
-                break   # experiment finished
-
-            spawn_id, spawn_rows = spawn_groups[spawn_idx]
-            spawn_rows = list(spawn_rows.itertuples(index=False))
-            row_ptr = 0
-            new_spawn_flag = False
+        
         
 
 

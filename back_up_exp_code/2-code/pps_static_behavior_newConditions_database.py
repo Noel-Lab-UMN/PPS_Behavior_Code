@@ -7,7 +7,6 @@ Notes:
  - Arduino reward control (optional pyserial)
  - Sync log includes ball slot columns and obstruction slot columns:
      slotN entries format: spawn_id|x_deg|y_cm|is_visible|radius_cm  (is_visible = 0/1 and includes flicker)
-     By shizhao liu 04/14/2024: replace is_visible with ball_opacity
      obs_slotN entries format: obs_index|width_cm|xdeg_from_mouse|ycm_from_mouse|is_hit
  - This is the BEHAVIOR version: PRBS/Bpod removed; no TTL thread; no prbs_bit column.
 """
@@ -15,6 +14,7 @@ Notes:
 import csv
 import random
 import threading
+import multiprocessing as mp
 import time
 import os
 import traceback
@@ -24,9 +24,25 @@ from datetime import datetime
 from dataclasses import dataclass, asdict
 import json
 
+import sys
 import numpy as np
 from psychopy import visual, core, event, monitors
+from pybpodapi.protocol import Bpod
+
 from util_general import load_json, deep_update, count_reward
+from util_analysis import analyze_pps_behav, update_config_pps_behav
+
+from scipy.io import savemat
+
+from rig_db_client_shizhao import (
+    RigDBClient,
+    SessionStorageManager,
+    SessionManager,
+    DataRecordCSV,
+    DBClientError,
+    SessionAborted,
+)
+
 
 # encoder import (may raise if not installed on dev machine)
 try:
@@ -40,46 +56,136 @@ try:
 except Exception:
     serial = None
 
-
-# Prompt for mouse name (blocking console input)
-mouse_name  = input("Enter mouse name (short, no spaces): ").strip()
-if not mouse_name:
-    mouse_name = "mouseUNK"
-
-RIG_NAME    = input("Enter rig name: ").strip()
-RIG_NAME_LIST = ['PPS_training_Rig_3', 'PPS_training_Rig_2', 'PPS_training_Rig_1', 'PPS_recording_Rig_1']
-if RIG_NAME not in RIG_NAME_LIST:
-    raise ValueError(f"{RIG_NAME} not found in existing rig list")
-
-# while True:
-#         choice_PRBS = input("Are you doing ephys recording and require PRBS (y/n)").strip().lower()
-#         if choice_PRBS in {"y", "yes"}:
-#             DO_PRBS = True
-#             break
-#         if choice_PRBS in {"n", "no"}:
-#             DO_PRBS = False
-#         print("Please enter 'n' or 'c'.")
-
-# choice_PRBS = input("Are you doing ephys recording and require PRBS (y/n)")
-# if choice_PRBS in {"y", "Y", "yes"}:
-#     DO_PRBS = True
-# elif choice_PRBS in {"n", "N", "no"}:
-#     DO_PRBS = False
-
-
-#### read rig specifc parameters
+##
+exp_name            = 'pps_static_behavior_newParams' 
 home_path           = "Z:/17. Goal-directed-PPS"
-RIG_CONFIG_PATH = os.path.join(home_path, f"3-config-json/rig_hardware/config_{RIG_NAME}.json")
-hardware_config = load_json(RIG_CONFIG_PATH)
-EXP_CONFIG_PATH = os.path.join(home_path, "3-config-json/exp_default/config_default_pps_static_behavior.json")
-default_exp_config = load_json(EXP_CONFIG_PATH)
-config_all = deep_update(hardware_config, default_exp_config)
+EXP_CONFIG_PATH     = os.path.join(home_path, f"3-config-json/exp_default/config_default_database_{exp_name}.json")
+default_exp_config  = load_json(EXP_CONFIG_PATH)
 
-ANIMAL_CONFIG_PATH = os.path.join(home_path,f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_pps_static_behavior.json")
-#if os.path.exists(ANIMAL_CONFIG_PATH):
+db_conf             = default_exp_config["database"]
+paths_conf          = default_exp_config["paths"]
+
+# =============================================================================
+# 2. INIT DB + STORAGE MANAGERS
+# =============================================================================
+
+client = RigDBClient(
+    db_conf["base_url"],
+    timeout_s=db_conf.get("timeout_s", 10.0),
+)
+
+storage = SessionStorageManager(
+    local_base_dir = Path.home() / "Desktop",
+    nas_base_dir=paths_conf["raw_data_dir"],
+    smb_base_unc=paths_conf.get("smb_base_unc", paths_conf["raw_data_dir"]),
+)
+
+datarecord = DataRecordCSV(paths_conf["raw_data_dir"])
+
+mgr = SessionManager(
+    client,
+    storage,
+    datarecord=datarecord,
+)
+
+
+# =============================================================================
+# 4. LOAD MOUSE AND RIG OPTIONS
+# =============================================================================
+rig_options = mgr.load_rig_options()
+print("\nAvailable rigs:")
+for i, opt in enumerate(rig_options, start=1):
+    print(f"{i}. {opt}")
+
+try:
+    selected_index = int(input("Select rig number: ")) - 1
+    selected_option = rig_options[selected_index]
+except Exception:
+    print("Invalid mouse selection.")
+    sys.exit(1)
+
+rig_name = selected_option
+
+
+mouse_options, option_to_mouse_id = mgr.load_mice_options(
+    experiment_id=db_conf["experiment_id"],
+    fallback_csv_path=paths_conf["mouse_record_csv"],
+)
+
+if not mouse_options:
+    print("No mice available from DB or CSV fallback.")
+    sys.exit(1)
+
+print("\nAvailable mice:")
+for i, opt in enumerate(mouse_options, start=1):
+    print(f"{i}. {opt}")
+
+try:
+    selected_index = int(input("Select mouse number: ")) - 1
+    selected_option = mouse_options[selected_index]
+except Exception:
+    print("Invalid mouse selection.")
+    sys.exit(1)
+
+sel = mgr.parse_selected_mouse(selected_option, option_to_mouse_id)
+mouse_id = sel.mouse_id
+mouse_name = sel.mouse_name
+
+
+# prompt for whether we're doring ephys recording and need to sync
+while True:
+    choice_ephys = input("Are you running ephys recording ([y] or [n]): ").strip().lower()
+
+    if choice_ephys in {"y", "yes"}:
+        DO_EPHYS = True
+        break
+    if choice_ephys in {"n", "no"}:
+        DO_EPHYS = False
+        break
+    print("Please enter 'y or 'n")
+
+
+# =============================================================================
+#  load rig and animal specifc parameters 
+# =============================================================================
+RIG_CONFIG_PATH     = os.path.join(home_path,f"3-config-json/rig_hardware/config_{rig_name}.json")
+hardware_config     = load_json(RIG_CONFIG_PATH)
+config_all          = deep_update(hardware_config, default_exp_config)
+
+
+ANIMAL_CONFIG_PATH = os.path.join(home_path, f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_{exp_name}.json")
+# if os.path.exists(ANIMAL_CONFIG_PATH):
 animal_config = load_json(ANIMAL_CONFIG_PATH)
 config_all = deep_update(config_all, animal_config)
 print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
+# else:
+#     print(f"[WARNING] {ANIMAL_CONFIG_PATH} not found. Using default parameters only.")
+# ====================================================================================
+# Get parameter from the database
+new_params_database = mgr.get_next_params(mouse_id = mouse_id,  experiment_id=db_conf["experiment_id"],
+                                          experiment_name = exp_name, defaults = {}), 
+# ====================================================================================
+while True:
+    use_base_config = input("Do you want to use parameters from local file ([L]), or database ([D]):  ").strip().lower()
+    if use_base_config in {"l","local"}:
+        break
+    elif use_base_config in {"d","database"}:
+        config_all = deep_update(config_all, new_params_database)
+        break
+    
+# #### read rig specifc parameters
+# home_path           = "Z:/17. Goal-directed-PPS"
+# RIG_CONFIG_PATH = os.path.join(home_path, f"3-config-json/rig_hardware/config_{RIG_NAME}.json")
+# hardware_config = load_json(RIG_CONFIG_PATH)
+# EXP_CONFIG_PATH = os.path.join(home_path, "3-config-json/exp_default/config_default_pps_static_behavior_newParams.json")
+# default_exp_config = load_json(EXP_CONFIG_PATH)
+# config_all = deep_update(hardware_config, default_exp_config)
+
+# ANIMAL_CONFIG_PATH = os.path.join(home_path,f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_pps_static_behavior_newParams.json")
+# #if os.path.exists(ANIMAL_CONFIG_PATH):
+# animal_config = load_json(ANIMAL_CONFIG_PATH)
+# config_all = deep_update(config_all, animal_config)
+# print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
 # else:
 #     print(f"[WARNING] {ANIMAL_CONFIG_PATH} not found. Using default parameters only.")
 
@@ -87,6 +193,7 @@ print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
 rig_conf                    = config_all["hardware"]
 exp_conf                    = config_all["experiment"]
 reward_conf                 = config_all["reward"]
+ball_conf                   = config_all["ball"]
 spawn_conf                  = config_all["spawn"]
 obstruction_conf            = config_all["obstruction"]
 region1_conf                = config_all["region_1"]
@@ -110,29 +217,53 @@ REWARD_AMOUNT_LIST          = rig_conf["REWARD_AMOUNT_LIST"]
 REWARD_DURATION_MS_LIST     = rig_conf["REWARD_DURATION_MS_LIST"] 
 # ================================================================
 # experimental parameters
-RUNTIME_TIMEOUT_MINUTES     = exp_conf["RUNTIME_TIMEOUT_MINUTES"] 
-WHEEL_GAIN_CM_PER_TICK      = exp_conf["WHEEL_GAIN_CM_PER_TICK"]
-BALL_FALL_SPEED_CM_S        = exp_conf["BALL_FALL_SPEED_CM_S"]
-#SUCCESS_EDGE_TOLERANCE_MULT = exp_conf["SUCCESS_EDGE_TOLERANCE_MULT"]
-SUCCESS_EDGE_TOLERANCE_RANGE = exp_conf["SUCCESS_EDGE_TOLERANCE_RANGE"]
-SPACE_DEGREES                = exp_conf["SPACE_DEGREES"]
-WARMUP_S                     = exp_conf["WARMUP_S"]
+RUNTIME_TIMEOUT_MINUTES         = exp_conf["RUNTIME_TIMEOUT_MINUTES"] 
+WHEEL_GAIN_DISTRIBUTION         = exp_conf["WHEEL_GAIN_DISTRIBUTION"] # "sample" or "choice"
+WHEEL_GAIN_CM_PER_TICK_LIST     = tuple(exp_conf["WHEEL_GAIN_CM_PER_TICK_LIST"]) 
+WHEEL_GAIN_CM_PER_TICK_RANGE    = tuple(exp_conf["WHEEL_GAIN_CM_PER_TICK_RANGE"])
+#WHEEL_JITTER_COEF_LIST          = exp_conf["WHEEL_JITTER_COEF_LIST"] 
+WHEEL_JITTER_COEF               = exp_conf["WHEEL_JITTER_COEF"] 
+WHEEL_JITTER_INTERCEPT          = exp_conf["WHEEL_JITTER_INTERCEPT"] 
+NO_JITTER_PORTION               = exp_conf["NO_JITTER_PORTION"] 
+SUCCESS_EDGE_TOLERANCE_RANGE    = tuple(exp_conf["SUCCESS_EDGE_TOLERANCE_RANGE"])
+SPACE_DEGREES                   = exp_conf["SPACE_DEGREES"]
+WARMUP_S                        = exp_conf["WARMUP_S"]
 # ================================================================
+# ball parameters
+BALL_FALL_SPEED_DISTRIBUTION            = ball_conf["BALL_FALL_SPEED_DISTRIBUTION"]
+BALL_FALL_SPEED_CM_S_RANGE              = tuple(ball_conf["BALL_FALL_SPEED_CM_S_RANGE"]) 
+BALL_FALL_SPEED_CM_S_LIST               = tuple(ball_conf["BALL_FALL_SPEED_CM_S_LIST"])
+BALL_RANDOM_WALK_DISTRIBUTION           = ball_conf["BALL_RANDOM_WALK_DISTRIBUTION"]
+BALL_RANDOM_WALK_VEL_BIAS_LIST          = tuple(ball_conf["BALL_RANDOM_WALK_VEL_BIAS_LIST"])
+BALL_RANDOM_WALK_VEL_STD_LIST           = tuple(ball_conf["BALL_RANDOM_WALK_VEL_STD_LIST"])
+BALL_RANDOM_WALK_VEL_BIAS_SCALE          = ball_conf["BALL_RANDOM_WALK_VEL_BIAS_SCALE"] 
+BALL_RANDOM_WALK_VEL_STD_RANGE           = tuple(ball_conf["BALL_RANDOM_WALK_VEL_STD_RANGE"])
+NO_RANDOM_WALK_PORTION                  = ball_conf["NO_RANDOM_WALK_PORTION"]  
+CIRCLE_RADIUS_CM_LIST                   = tuple(ball_conf["CIRCLE_RADIUS_CM_LIST"])
+BALL_OPACITY_DISTRIBUTION               = ball_conf["BALL_OPACITY_DISTRIBUTION"] 
+BALL_OPACITY_LIST                       = ball_conf["BALL_OPACITY_LIST"]
+BALL_OPACITY_RANGE                      = ball_conf["BALL_OPACITY_RANGE"]
+BALL_OPACITY_LAMBDA                     = ball_conf["BALL_OPACITY_LAMBDA"] 
+HIGH_OPACITY_PORTION                    = ball_conf["HIGH_OPACITY_PORTION"] 
+BALL_FLICKER_DURATION                   = ball_conf["BALL_FLICKER_DURATION"]
+BALL_FLICKER_INTERVAL                   = ball_conf["BALL_FLICKER_INTERVAL"]
+#=================================================================
 ## spawn parameters
-CIRCLE_RADIUS_CM_LIST       = spawn_conf["CIRCLE_RADIUS_CM_LIST"]
+#CIRCLE_RADIUS_CM_LIST       = spawn_conf["CIRCLE_RADIUS_CM_LIST"]
 SPAWN_DISTRIBUTION          = spawn_conf["SPAWN_DISTRIBUTION"]
 SPAWN_GAUSS_CENTER_LIST     = spawn_conf["SPAWN_GAUSS_CENTER_LIST"]
 SPAWN_GAUSS_SIGMA_CM        = spawn_conf["SPAWN_GAUSS_SIGMA_CM"]
 SPAWN_GAUSS_RESAMPLE_MAX    = spawn_conf["SPAWN_GAUSS_RESAMPLE_MAX"]
 SPAWN_GAUSS_CLAMP_TO_SCREEN = spawn_conf["SPAWN_GAUSS_CLAMP_TO_SCREEN"]
+SPAWN_UNIFORM_RANGE         = spawn_conf["SPAWN_UNIFORM_RANGE"] 
 SPAWN_Y_OFFSET              = spawn_conf["SPAWN_Y_OFFSET"]
 SPAWN_ONLY_STATIONARY       = spawn_conf["SPAWN_ONLY_STATIONARY"]
 STATIONARY_INTERVAL         = spawn_conf["STATIONARY_INTERVAL"]
 STATIONARY_TOLERANCE        = spawn_conf["STATIONARY_TOLERANCE"]
 SPAWN_INTERVAL_RANGE        = tuple(spawn_conf["SPAWN_INTERVAL_RANGE"])
-BALL_OPACITY                = spawn_conf["BALL_OPACITY"]
-BALL_FLICKER_DURATION       = spawn_conf["BALL_FLICKER_DURATION"]
-BALL_FLICKER_INTERVAL       = spawn_conf["BALL_FLICKER_INTERVAL"]
+#BALL_OPACITY                = spawn_conf["BALL_OPACITY"]
+# BALL_OPACITY_LIST           =  spawn_conf(["BALL_OPACITY_LIST"])
+
 MULTIPLE_BALLS              = spawn_conf["MULTIPLE_BALLS"]
 MULTIPLE_BALLS_SPAWN_INTERVAL = tuple(spawn_conf["MULTIPLE_BALLS_SPAWN_INTERVAL"])
 DEFAULT_LOG_MAX_BALLS       = spawn_conf["DEFAULT_LOG_MAX_BALLS"]
@@ -150,8 +281,24 @@ OBSTRUCTION_REGEN_TIME      = obstruction_conf["OBSTRUCTION_REGEN_TIME"]
 OBSTRUCTION_NUM             = obstruction_conf["OBSTRUCTION_NUM"]
 OBSTRUCTION_MIN_CENTER_DIST_X = obstruction_conf["OBSTRUCTION_MIN_CENTER_DIST_X"]
 
+REWARD_FUNCTION             = reward_conf["REWARD_FUNCTION"]
+REWARD_TARGET               = reward_conf["REWARD_TARGET"] 
 REWARD_UNIT                 = reward_conf["REWARD_UNIT"]
 REWARD_TARGET_COEF_LIST     = reward_conf["REWARD_TARGET_COEF_LIST"] 
+
+# ==================================================================
+# PRBS parameters, only call when recording is on
+if DO_EPHYS:
+    prbs_conf = config_all["prbs"]
+
+    PRBS_MIN_INTERVAL           = prbs_conf["PRBS_MIN_INTERVAL"]
+    PRBS_MAX_INTERVAL           = prbs_conf["PRBS_MAX_INTERVAL"]
+    BPOD_SERIAL_PORT            = prbs_conf["BPOD_SERIAL_PORT"]
+    PRBS_CHANNEL                = prbs_conf["PRBS_CHANNEL"]
+    TRIAL_CHANNEL               = prbs_conf["TRIAL_CHANNEL"]
+    REWARD_CHANNEL              = prbs_conf["REWARD_CHANNEL"]
+    TRIAL_START_SIGNAL_DURATION = prbs_conf["TRIAL_START_SIGNAL_DURATION"]
+    REWARD_SIGNAL_DURATION      = prbs_conf["REWARD_SIGNAL_DURATION"] 
 
 # ===================================================================
 # Regions. 
@@ -197,7 +344,7 @@ current_time  = datetime.now().strftime("%H%M")
 SYNC_LOG_FILENAME = os.path.join(session_dir, f"sync_log_pps_behav_{mouse_name}_{date_str}_{current_time}.csv")
 ERROR_LOG_PATH = os.path.join(session_dir, 'error.txt')
 EXP_CONFIG_FILENAME = os.path.join(session_dir, f"exp_config_pps_behav_{mouse_name}_{date_str}_{current_time}.json")
-
+PARAMS_FILENAME = os.path.join(session_dir, f"exp_params_behav_{mouse_name}_{date_str}_{current_time}.mat")
 
 
 
@@ -208,7 +355,7 @@ reward_target_dict     = dict(zip(SPAWN_GAUSS_CENTER_LIST, REWARD_TARGET_LIST))
 config_to_save = {
     "metadata": {
         "mouse_name": mouse_name,
-        "rig_name": RIG_NAME,
+        "rig_name": rig_name,
         "experiment_name": "pps_static_behavior",
         "timestamp": f"{date_str}_{current_time}",
     },
@@ -218,8 +365,328 @@ config_to_save = {
 with open(EXP_CONFIG_FILENAME, "w") as f:
     json.dump(config_to_save, f, indent=2)
 
+# =============================
+# Define reward mapping function
+# def reward_mapping(REWARD_FUNCTION):
+#     match REWARD_FUNCTION:
+#         case "single":
+#             reward_openning_time = REWARD_TARGET
+#         case "list":
+#             reward_duration_dict   = dict(zip(REWARD_AMOUNT_LIST, REWARD_DURATION_MS_LIST))
+#             REWARD_TARGET_LIST     = [i * REWARD_UNIT for i in REWARD_TARGET_COEF_LIST]
+#             reward_target_dict     = dict(zip(SPAWN_GAUSS_CENTER_LIST, REWARD_TARGET_LIST))
+
+#             reward_amount = reward_target_dict[ball['spawn_x']]
+#             open_t = reward_duration_dict[reward_amount]
+            
+#             reward_openning_time    = reward_target_dict[""]
+#     return reward_openning_time
+# ==============================
+# =========================
+# Define sampler of conditions
+# =========================
+def sample_from_list(nTrial, condition_list):
+    samples = np.random.choice(condition_list, size=nTrial)
+    return samples
+def sample_mixture_uniform(nTrial, low_high_bound, p_outlier, val_outlier):
+    low_bound = low_high_bound[0]
+    high_bound  = low_high_bound[1]
+
+    is_outlier = np.random.rand(nTrial) <= p_outlier
+    n_sample = (~is_outlier).sum()
+
+    uni_samples = np.random.uniform(low_bound, high_bound, size = n_sample)
+
+    samples = np.empty(nTrial)
+    samples[is_outlier] = val_outlier
+    samples[~is_outlier] = uni_samples
+
+    return samples
+
+def sample_mixture_exponential(nTrial, low_high_bound, lam, p_outlier, val_outlier):
+    low_bound = low_high_bound[0]
+    high_bound  = low_high_bound[1]
+
+    is_outlier = np.random.rand(nTrial) <= p_outlier
+    n_sample = (~is_outlier).sum()
+
+    cdf_low = 1 - np.exp(-low_bound / lam)
+    cdf_high = 1 - np.exp(-high_bound / lam)
+    u = np.random.uniform(cdf_low, cdf_high, size=n_sample)
+    exp_samples = -lam * np.log(1 - u)
+
+    samples = np.empty(nTrial)
+    samples[is_outlier] = val_outlier
+    samples[~is_outlier] = exp_samples
+
+    return samples
+
+def sample_mixed_gaussion_clamped(nTrials, gaussian_center_list, gaussian_sigma):
+    samples = np.empty(nTrials)
+
+    return samples
 
 
+
+
+
+class TrialConditionSampler:
+    def __init__(self, chunk_size = 1500):
+        self.chunk_size = chunk_size
+        ##### 1. initial x
+        self.spawn_distribution          = SPAWN_DISTRIBUTION
+        self.spawn_gauss_center_list     = SPAWN_GAUSS_CENTER_LIST
+        self.spawn_gauss_sigma_cm        = SPAWN_GAUSS_SIGMA_CM
+        self.spawn_gauss_clamp_to_screen = SPAWN_GAUSS_CLAMP_TO_SCREEN
+        self.spawn_uniform_range         = SPAWN_UNIFORM_RANGE
+        self.spawn_x_chunk               = np.array([], dtype = float) 
+
+        ##### 2. radius of ball
+        self.ball_radius_cm_list         = CIRCLE_RADIUS_CM_LIST
+        self.ball_radius_chunk           = np.array([], dtype=float)
+
+        ##### 3. opacity (contrast) of ball
+        self.ball_opacity_distibution    = BALL_OPACITY_DISTRIBUTION
+        self.ball_opacity_list           = BALL_OPACITY_LIST
+        self.ball_opacity_range          = BALL_OPACITY_RANGE
+        self.ball_opacity_lambda         = BALL_OPACITY_LAMBDA
+        self.high_opacity_portion        = HIGH_OPACITY_PORTION
+        self.ball_opacity_chunk          = np.array([], dtype=float)
+
+        ##### 4. falling speed of ball
+        self.ball_speed_distribution     = BALL_FALL_SPEED_DISTRIBUTION
+        self.ball_y_speed_list           = BALL_FALL_SPEED_CM_S_LIST
+        self.ball_y_speed_range          = BALL_FALL_SPEED_CM_S_RANGE
+        self.ball_y_speed_chunk          = np.array([], dtype=float)
+
+        #### 5.  random walk of the ball
+        self.ball_random_walk_distribution  = BALL_RANDOM_WALK_DISTRIBUTION
+        self.ball_random_walk_bias_list     = BALL_RANDOM_WALK_VEL_BIAS_LIST
+        self.ball_random_walk_std_list      = BALL_RANDOM_WALK_VEL_STD_LIST
+        self.ball_random_walk_bias_scale    = BALL_RANDOM_WALK_VEL_BIAS_SCALE
+        self.ball_random_walk_std_range           = BALL_RANDOM_WALK_VEL_STD_RANGE
+        self.no_random_walk_portion         = NO_RANDOM_WALK_PORTION
+        self.ball_random_walk_bias_chunk = np.array([], dtype=float)
+        self.ball_random_walk_std_chunk  = np.array([], dtype=float)
+
+        ##### 6. gain/jitter of the wheel
+        self.wheel_gain_distribution     = WHEEL_GAIN_DISTRIBUTION
+        self.wheel_gain_list             = WHEEL_GAIN_CM_PER_TICK_LIST
+        self.wheel_gain_range            = WHEEL_GAIN_CM_PER_TICK_RANGE
+        self.no_wheel_jitter_portion     = NO_JITTER_PORTION
+        self.wheel_jitter_coef           = WHEEL_JITTER_COEF
+        self.wheel_jitter_intercept      = WHEEL_JITTER_INTERCEPT
+
+        self.wheel_gain_chunk   = np.array([], dtype=float)
+        self.wheel_jitter_chunk = np.array([], dtype=float)
+        
+        
+       
+        self.idx = 0
+        self._append_chunk()
+
+    def _append_chunk(self):
+    ##### 1. initial x
+        match self.spawn_distribution:
+            case "uniform":
+                new_init_x = sample_mixture_uniform(self.chunk_size, self.spawn_uniform_range , 0, 0)
+            case "gaussian":
+                new_init_x = sample_mixed_gaussion_clamped(self.chunk_size, self.spawn_gauss_center_list, self.spawn_gauss_sigma_cm)
+            case "choice":
+                new_init_x = sample_from_list(self.chunk_size,  self.spawn_gauss_center_list )
+        
+        
+        ##### 2. radius of ball 
+        new_ball_radius   = sample_from_list(self.chunk_size, self.ball_radius_cm_list)
+    
+        
+        ##### 3. opacity (contrast) of ball
+        match self.ball_opacity_distibution:
+            case "choice":
+                new_ball_opacity = sample_from_list(self.chunk_size, self.ball_opacity_list)
+            case "sample":
+                new_ball_opacity = sample_mixture_exponential(self.chunk_size, self.ball_opacity_range,
+                                    self.ball_opacity_lambda, self.high_opacity_portion, 1)
+        
+
+        ##### 4. falling speed of ball
+        match self.ball_speed_distribution:
+            case "choice":
+                new_ball_y_speed = sample_from_list(self.chunk_size, self.ball_y_speed_list)
+            case "sample":
+                new_ball_y_speed = sample_mixture_uniform(self.chunk_size, self.ball_y_speed_range,
+                                                0, 0)
+        
+
+        #### 5.  random walk of the ball
+        match self.ball_random_walk_distribution:
+            case "choice":
+                new_random_walk_bias    = sample_from_list(self.chunk_size, self.ball_random_walk_bias_list)
+                new_random_walk_std     = sample_from_list(self.chunk_size, self.ball_random_walk_std_list)
+            case "sample":
+                new_random_walk_bias = np.random.normal(loc = 0.0, scale = self.ball_random_walk_bias_scale, size = self.chunk_size)
+
+                new_random_walk_std  = sample_mixture_uniform(self.chunk_size, self.ball_random_walk_std_range,
+                                                    0, 0)
+                
+        is_no_random_walk = np.random.rand(self.chunk_size) <= self.no_random_walk_portion
+
+        new_random_walk_bias[is_no_random_walk] = 0.0
+        new_random_walk_std[is_no_random_walk]  = 0.0
+
+    
+
+        ##### 6. gain/jitter of the wheel
+        match self.wheel_gain_distribution:
+            case "choice":
+                new_wheel_gain = sample_from_list(self.chunk_size, self.wheel_gain_list)
+            case "sample":
+                new_wheel_gain = sample_mixture_uniform(self.chunk_size, self.wheel_gain_range,
+                                                0, 0)
+        new_wheel_jitter = new_wheel_gain * self.wheel_jitter_coef + self.wheel_jitter_intercept
+        is_no_jitter = np.random.rand(self.chunk_size) <= self.no_wheel_jitter_portion
+        
+        new_wheel_jitter[is_no_jitter] = 0.0
+
+        
+
+    
+        ##### 7. make the random walk bias only away from the reward zone 
+        new_random_walk_bias_new = np.abs(new_random_walk_bias) * np.sign(new_init_x)
+
+
+
+        self.spawn_x_chunk      = np.concatenate([self.spawn_x_chunk, new_init_x])
+        self.ball_radius_chunk  = np.concatenate([self.ball_radius_chunk, new_ball_radius]) 
+        self.ball_opacity_chunk = np.concatenate([self.ball_opacity_chunk, new_ball_opacity])
+        self.ball_y_speed_chunk = np.concatenate([self.ball_y_speed_chunk, new_ball_y_speed])
+        self.ball_random_walk_bias_chunk    = np.concatenate([self.ball_random_walk_bias_chunk, new_random_walk_bias_new])
+        self.ball_random_walk_std_chunk     = np.concatenate([self.ball_random_walk_std_chunk , new_random_walk_std]) 
+        self.wheel_gain_chunk = np.concatenate([self.wheel_gain_chunk, new_wheel_gain])
+        self.wheel_jitter_chunk = np.concatenate([self.wheel_jitter_chunk, new_wheel_jitter]) 
+
+       
+
+    def next(self):
+        if self.idx >= len(self.spawn_x_chunk):
+            self._append_chunk()
+
+        out_params = {
+            "spawn_x": self.spawn_x_chunk[self.idx],
+            "ball_radius": self.ball_radius_chunk[self.idx],
+            "ball_opacity": self.ball_opacity_chunk[self.idx],
+            "ball_speed": self.ball_y_speed_chunk[self.idx],
+            "ball_random_walk_bias": self.ball_random_walk_bias_chunk[self.idx],
+            "ball_random_walk_std": self.ball_random_walk_std_chunk[self.idx],
+            "wheel_gain": self.wheel_gain_chunk[self.idx],
+            "wheel_jitter": self.wheel_jitter_chunk[self.idx],
+            "trial_idx": self.idx,
+        }
+        self.idx += 1
+        return out_params
+
+
+
+
+def save_trial_sampler_to_mat(sampler, filename):
+    def to_numpy(x):
+        """Convert Python objects to MATLAB-friendly format"""
+        if isinstance(x, np.ndarray):
+            return x
+        elif isinstance(x, (list, tuple)):
+            try:
+                return np.array(x)
+            except:
+                return np.array(x, dtype=object)
+        elif isinstance(x, (int, float, bool)):
+            return np.array([[x]])  # MATLAB likes 2D scalars
+        elif isinstance(x, str):
+            return x
+        else:
+            return str(x)  # fallback (for safety)
+
+    data = {}
+
+    # Loop through all attributes of the sampler
+    for key, value in sampler.__dict__.items():
+        try:
+            data[key] = to_numpy(value)
+        except Exception as e:
+            print(f"[WARNING] Could not convert {key}: {e}")
+            data[key] = str(value)
+
+    # Save to .mat
+    savemat(filename, data)
+    print(f"[INFO] Saved sampler to {filename}")
+# ===================================
+# Define PRBS helpers
+# ===================================
+def send_reward_pulse_hw_nonblocking():
+    global bpod
+    if bpod is None:
+        return
+    try:
+        bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC,
+                             channel_number=REWARD_CHANNEL, value=1)
+    except Exception as e:
+        print("Warning: send_trial_pulse_hw_nonblocking failed to set high:", e)
+
+    t = threading.Timer(REWARD_SIGNAL_DURATION,
+                        lambda: bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC,
+                                                     channel_number=REWARD_CHANNEL, value=0))
+    t.daemon = True
+    t.start()
+
+def send_prbs_bit_hw(bit):
+    """Send PRBS bit to Bpod PRBS BNC channel (safe wrapper)."""
+    global bpod
+    if bpod is None:
+        return
+    try:
+        bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC,
+                             channel_number=PRBS_CHANNEL, value=int(bit))
+    except Exception as e:
+        print("Warning: send_prbs_bit_hw failed:", e)
+
+def send_trial_pulse_hw_nonblocking():
+    """Set trial BNC high for TRIAL_START_SIGNAL_DURATION, non-blocking using Timer."""
+    global bpod
+    if bpod is None:
+        return
+    try:
+        bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC,
+                             channel_number=TRIAL_CHANNEL, value=1)
+    except Exception as e:
+        print("Warning: send_trial_pulse_hw_nonblocking failed to set high:", e)
+
+    t = threading.Timer(TRIAL_START_SIGNAL_DURATION,
+                        lambda: bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC,
+                                                     channel_number=TRIAL_CHANNEL, value=0))
+    t.daemon = True
+    t.start()
+
+# -------------------------
+# === PRBS THREAD ===
+# -------------------------
+def prbs_thread_fn():
+    """
+    Background PRBS toggler: flips prbs_shared at random intervals and writes to Bpod BNC.
+    This runs as a thread and uses prbs_shared.get_lock() to update the shared integer.
+    """
+    print("[PRBS] thread started.")
+    # Immediately write the initial state once (so hardware & recordings have a known starting bit)
+    with prbs_shared.get_lock():
+        bit = int(prbs_shared.value)
+    send_prbs_bit_hw(bit)
+
+    while prbs_running_event.is_set():
+        interval = random.uniform(PRBS_MIN_INTERVAL, PRBS_MAX_INTERVAL)
+        time.sleep(interval)
+        with prbs_shared.get_lock():
+            prbs_shared.value ^= 1
+            bit = int(prbs_shared.value)
+        send_prbs_bit_hw(bit)
+    print("[PRBS] thread exiting.")
 
 # ======================== 
 # Define helper functions
@@ -542,6 +1009,8 @@ circle = visual.Circle(win, fillColor=(1.0, 1.0, 1.0),
 
 success_text = visual.TextStim(win, text='SUCCESS!', height=2.5, bold=True, pos=(0.0, 0.0))
 
+
+
 # ============================
 # Encoder & devices
 # ============================
@@ -625,8 +1094,12 @@ def send_reward(duration_ms):
 # ============================
 # Warmup: textures & prep
 # ============================
-print(f"[INFO] Warmup for {WARMUP_S:.1f}s starting (textures will be generated now)...", flush=True)
+print(f"[INFO] Warmup for {WARMUP_S:.1f}s starting (parameters and textures will be generated now)...", flush=True)
 warmup_start_ts = perf_counter()
+
+trial_param_sampler = TrialConditionSampler()
+save_trial_sampler_to_mat(trial_param_sampler, PARAMS_FILENAME)
+
 
 PATCH_SQUARE_SIZE_CM = 5.0
 PATCH_COLOR_OPACITY = 1.0
@@ -795,24 +1268,31 @@ def world_to_screen_x(world_x_cm, start, screen_w, space_w, clamp=True):
     screen_x = rel - (screen_w / 2.0)
     return screen_x
 
-def spawn_ball_ts(now_ts, win_start, window_intervals):
-    global last_spawn_ts, next_spawn_time, global_spawn_id, sync_start_ts, last_spawn_region
+def spawn_ball_ts(now_ts, win_start, window_intervals, trial_params):
+    global last_spawn_ts, next_spawn_time, global_spawn_id, sync_start_ts, last_spawn_region, win
 
     spawn_interval_s = random.uniform(*SPAWN_INTERVAL_RANGE)
-    if SPAWN_DISTRIBUTION == "gaussian":
-        spawn_center_cm = random.choice(SPAWN_GAUSS_CENTER_LIST)
-        spawn_world = general_spawn_gaussian_on_screen_center(
-            win_start=win_start,
-            screen_w=SCREEN_WIDTH_CM,
-            space_w = SPACE_WIDTH_CM,
-            spawn_center_cm = spawn_center_cm,
-            sigma_cm=SPAWN_GAUSS_SIGMA_CM,
-            clamp_to_screen=SPAWN_GAUSS_CLAMP_TO_SCREEN,
-            max_resamples=SPAWN_GAUSS_RESAMPLE_MAX
-        )
-    else:
-        spawn_world = general_spawn_uniform_on_screen(win_start, window_intervals, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
+    # if SPAWN_DISTRIBUTION == "gaussian":
+    #     spawn_center_cm = random.choice(SPAWN_GAUSS_CENTER_LIST)
+    #     spawn_world = general_spawn_gaussian_on_screen_center(
+    #         win_start=win_start,
+    #         screen_w=SCREEN_WIDTH_CM,
+    #         space_w = SPACE_WIDTH_CM,
+    #         spawn_center_cm = spawn_center_cm,
+    #         sigma_cm=SPAWN_GAUSS_SIGMA_CM,
+    #         clamp_to_screen=SPAWN_GAUSS_CLAMP_TO_SCREEN,
+    #         max_resamples=SPAWN_GAUSS_RESAMPLE_MAX
+    #     )
+    # else:
+    #     spawn_world = general_spawn_uniform_on_screen(win_start, window_intervals, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
 
+    spawn_center_cm     = trial_params["spawn_x"]
+    screen_w            = SCREEN_WIDTH_CM
+    space_w             = SPACE_WIDTH_CM
+    center_world        = wrap_pos(win_start + (screen_w / 2.0), space_w)
+
+    spawn_world         = wrap_pos(center_world + spawn_center_cm, space_w)
+    
 
     # spawn_world = general_spawn_uniform_on_screen(win_start, window_intervals, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
     chosen_region = None
@@ -827,7 +1307,11 @@ def spawn_ball_ts(now_ts, win_start, window_intervals):
 
     global_spawn_id += 1
     # By shizhao liu 03/30/2026, randomly choose a radius from a list
-    ball_radius = random.choice(CIRCLE_RADIUS_CM_LIST) 
+    ball_radius = trial_params["ball_radius"]
+    ball_opacity = trial_params["ball_opacity"]
+    ball_y_speed = trial_params["ball_speed"]
+    ball_random_walk_mean   = trial_params["ball_random_walk_bias"]
+    ball_random_walk_std    = trial_params["ball_random_walk_std"]
     ball = {
         'world_x_cm': float(spawn_world) % SPACE_WIDTH_CM,
         'y_cm': half_screen_h - ball_radius - SPAWN_Y_OFFSET, # By Shizhao Liu 03/06/2026. Add an offset so that the ball can start closer to the animal
@@ -835,7 +1319,11 @@ def spawn_ball_ts(now_ts, win_start, window_intervals):
         'spawn_region': last_spawn_region,
         'spawn_id': global_spawn_id,
         'radius': ball_radius,
-        'init_x': spawn_center_cm
+        'init_x': spawn_center_cm,
+        'opacity': ball_opacity,
+        'y_speed': ball_y_speed,
+        'rand_walk_mean': ball_random_walk_mean,
+        'rand_walk_std': ball_random_walk_std
     }
     balls.append(ball)
 
@@ -844,12 +1332,15 @@ def spawn_ball_ts(now_ts, win_start, window_intervals):
 
     last_spawn_ts = now_ts
     next_spawn_time = None
+    if DO_EPHYS:
+        #### send pulse when this ball apprears on the screen
+        win.callOnFlip(send_trial_pulse_hw_nonblocking)
     return ball
 
-def initial_spawn(mouse_center_cm):
+def initial_spawn(mouse_center_cm, trial_params):
     win_start, win_end = window_start_end(mouse_center_cm, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
     window_intervals = [(win_start, win_start + SCREEN_WIDTH_CM)] if (win_start + SCREEN_WIDTH_CM <= SPACE_WIDTH_CM) else [(win_start, SPACE_WIDTH_CM), (0.0, (win_start + SCREEN_WIDTH_CM) - SPACE_WIDTH_CM)]
-    spawn_ball_ts(perf_counter(), win_start, window_intervals)
+    spawn_ball_ts(perf_counter(), win_start, window_intervals, trial_params)
 
 def apply_gain_function_for_region(region_name, raw_target_delta, dt, region_conf):
     global prev_applied_delta_by_region
@@ -868,13 +1359,18 @@ sync_writer = csv.writer(sync_f)
 
 _log_max_balls = MAX_NUM_BALLS if (MAX_NUM_BALLS is not None) else _DEFAULT_LOG_MAX_BALLS
 # IMPORTANT: _log_max_obstructions was computed above and is NOT used for drawing.
-
-header = [
-    'frame_idx', 't_global_s', 'window_deg_range', 'mouse_center_deg',
-    'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount',
-    'running_tick_sum','wheel_is_stationary', # Shizhao Liu 0206: added a varible to indicate whether the wheel is stationary
-    'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'base_delta_cm', 'delta_cm', 'gain_applied'
-]
+if DO_EPHYS:
+    header = ['prbs_val',
+        'frame_idx', 't_global_s', 'window_deg_range', 'mouse_center_deg',
+        'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount',
+        'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'base_delta_cm', 'delta_cm', 'gain_applied',
+    ]
+else:
+    header = [
+        'frame_idx', 't_global_s', 'window_deg_range', 'mouse_center_deg',
+        'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount',
+        'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'base_delta_cm', 'delta_cm', 'gain_applied',
+    ]
 for i in range(1, _log_max_balls + 1):
     header.append(f"slot{i}")
 for i in range(1, _log_max_obstructions + 1):
@@ -953,17 +1449,60 @@ delta_tick_history = []
 running_tick_sum = 0.0
 
 experiment_start_ts = perf_counter()
+if DO_EPHYS:
+    #bpod = None           # Bpod instance (set in main_session)
+    # Initialize Bpod now (inside main) so child processes don't create/initialize Bpod on import
+    bpod = Bpod(serial_port = BPOD_SERIAL_PORT)
+    prbs_thread = None    # thread handle for PRBS
+
+    # Multiprocessing-shared PRBS bit (logger process reads this)
+    prbs_shared = mp.Value('i', 0)
+    prbs_running_event = threading.Event()
+    prbs_running_event.clear()
+
+    print("Starting PRBS thread and global clock now (will persist for entire session).")
+    prbs_running_event.set()
+
+    # reset experimental timebase
+    global_clock = core.Clock()
+    global_clock.reset()
+    # initialize prbs_shared to 0 and send a first bit
+    with prbs_shared.get_lock():
+        prbs_shared.value = 0
+    send_prbs_bit_hw(0)
+    prbs_thread = threading.Thread(target=prbs_thread_fn, daemon=True)
+    prbs_thread.start()
+
 
 try:
-    flicker_start_ts = perf_counter() 
 
+    ctx = mgr.begin_session(
+        mouse_name=mouse_name,
+        mouse_id=mouse_id,
+        experiment_name = exp_name,
+        experiment_id = db_conf["experiment_id"],
+        rig_id = db_conf.get("rig_id"),
+        parameters = session_parameters,
+        fallback_session_num=1,
+        session_at=datetime.now(ZoneInfo("America/Chicago")),
+    )
+
+    flicker_start_ts = perf_counter() 
+    sync_start_ts = perf_counter()
     last_obstruction_regen_ts = experiment_start_ts if SPAWN_OBSTRUCTIONS else None
     if SPAWN_OBSTRUCTIONS:
         generate_obstructions()
 
-    #initial_spawn(mouse_center_cm)
+    trial_params = trial_param_sampler.next()
+ 
+
+    new_ball = True
+    #initial_spawn(mouse_center_cm, trial_params)
 
     while True:
+        if new_ball == True:
+            trial_params = trial_param_sampler.next()
+            new_ball = False
         #### Record current time
         if RUNTIME_TIMEOUT_MINUTES and RUNTIME_TIMEOUT_MINUTES > 0:
             if (perf_counter() - experiment_start_ts) > (RUNTIME_TIMEOUT_MINUTES * 60.0):
@@ -1012,7 +1551,12 @@ try:
                 delta_ticks = 0
 
         ### translate ticks to center meters on the screen
-        base_delta_cm = delta_ticks * WHEEL_GAIN_CM_PER_TICK
+      
+        wheel_gain = trial_params["wheel_gain"]
+        wheel_jitter = trial_params["wheel_jitter"]
+        base_delta_cm = delta_ticks * random.gauss(wheel_gain, wheel_jitter)
+
+        #base_delta_cm += 
 
         center_deg = cm_to_deg(mouse_center_cm)
         current_region_name = None
@@ -1069,7 +1613,7 @@ try:
                         })
 
         v_center = regions.get(current_region_name, {}).get('linear_velocity')
-        scenery_speed_cm_s = float(v_center) if (v_center is not None) else BALL_FALL_SPEED_CM_S
+        scenery_speed_cm_s = float(v_center) if (v_center is not None) else BALL_FALL_SPEED_CM_S_LIST[0]
 
         scenery_offset_cm = (scenery_offset_cm + scenery_speed_cm_s * dt_clamped) % SCREEN_HEIGHT_CM
 
@@ -1090,10 +1634,11 @@ try:
         if next_spawn_time is not None and ts >= next_spawn_time:
             # spawn_ball_ts(ts, win_start, window_intervals)
             if (not SPAWN_ONLY_STATIONARY) | (SPAWN_ONLY_STATIONARY and wheel_is_stationary):
-                spawn_ball_ts(ts, win_start, window_intervals)
+                spawn_ball_ts(ts, win_start, window_intervals, trial_params)
+                #new_ball = True
             
 
-
+ 
         for obs in obstructions:
             obs['hit'] = 0
 
@@ -1107,7 +1652,11 @@ try:
         # Is so, take appropriate actions
         # ===========================================
         for bi, ball in enumerate(balls):
-            ball['y_cm'] -= scenery_speed_cm_s * dt_clamped
+            #ball['y_cm'] -= scenery_speed_cm_s * dt_clamped
+            ball['y_cm'] -= ball['y_speed'] * dt_clamped
+            #### random walk of the ball
+            random_walk_vel = random.gauss(ball['rand_walk_mean'],ball['rand_walk_std'] )
+            ball['world_x_cm'] += random_walk_vel * dt_clamped
            # bottom_threshold = -half_screen_h + CIRCLE_RADIUS_CM
             bottom_threshold = -half_screen_h + ball['radius']
 
@@ -1146,6 +1695,7 @@ try:
             reach_bottom = 0
             if ball['y_cm'] <= bottom_threshold:
                 reach_bottom = 1
+                
                 if horiz_in:
                     drawn_x = world_to_screen_x(ball['world_x_cm'], win_start, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
                     #tolerance = SUCCESS_EDGE_TOLERANCE_MULT * CIRCLE_RADIUS_CM
@@ -1159,12 +1709,23 @@ try:
                     #     raise ValueError("Reward zone not specified")
 
                     if is_in_zone and (not reward_sent_this_frame):
-                        reward_amount = reward_target_dict[ball['init_x']]
+                        match REWARD_FUNCTION:
+                            case "list":
+                                reward_amount = reward_target_dict[ball['init_x']]
+                              
+                            case "single":
+                                reward_amount = REWARD_TARGET
+                            
                         open_t = reward_duration_dict[reward_amount]
+
+                        
                         if send_reward(open_t):
+                            
                             reward_sent_this_frame = True
                             reward_active_until = perf_counter() + (open_t / 1000.0)
                             reward_state_pulse_pending = True
+                            # if DO_EPHYS:
+                            #     send_reward_pulse_hw_nonblocking()
 
                 remove_indices.append(bi)
                 if not MULTIPLE_BALLS:
@@ -1258,7 +1819,8 @@ try:
             if idx < len(visible_ball_flags) and visible_ball_flags[idx] and flicker_on_now:
                 drawn_x = world_to_screen_x(ball['world_x_cm'], win_start, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
                 circle.pos = (drawn_x, ball['y_cm'])
-                circle.opacity = float(max(0.0, min(1.0, BALL_OPACITY)))
+                #circle.opacity = float(max(0.0, min(1.0, BALL_OPACITY)))
+                circle.opacity = float(max(0.0, min(1.0, ball['opacity'])))
                 # By Shizhao Liu 03/30/2026, adjustable radius
                 circle.radius = ball['radius']
                 circle.draw()
@@ -1275,7 +1837,7 @@ try:
         if sync_start_ts is None and len(balls) > 0:
             sync_start_ts = perf_counter()
 
-        t_global = f"{(perf_counter() - sync_start_ts):.6f}" if sync_start_ts is not None else ''
+        
 
         if reward_state_pulse_pending:
             reward_state_now = 1
@@ -1284,7 +1846,7 @@ try:
             reward_state_now = 1 if (perf_counter() < reward_active_until) else 0
 
         enc_cols = [enc_ticks, delta_ticks_raw, delta_ticks, f"{base_delta_cm:.4f}", f"{delta_cm:.4f}"]
-        gain_col = f"{gain_applied:.4f}"
+        gain_col = [f"{gain_applied:.4f}", f"{wheel_gain:.4f}", f"{wheel_jitter:.4f}"]
 
         slot_cells = [''] * _log_max_balls
         if len(balls) > 0:
@@ -1294,8 +1856,11 @@ try:
             rel_deg = (ball_deg - cm_to_deg(mouse_center_cm)) % 360.0
             ball_bl_y = b['y_cm'] + half_screen_h
             ball_radius = b['radius']
-            #By Shizhao liu 04/14/2026, replace is visible to ball_opacity
-            slot_cells[0] = f"{sid}|{rel_deg:.1f}|{ball_bl_y:.3f}|{BALL_OPACITY:.3f}|{ball_radius:.1f}"
+            ball_opacity = b['opacity']
+            ball_y_speed = b['y_speed']
+            ball_walk_mean = b['rand_walk_mean']
+            ball_walk_std   = b['rand_walk_std']
+            slot_cells[0] = f"{sid}|{rel_deg:.1f}|{ball_bl_y:.3f}|{ball_radius:.3f}|{ball_opacity:.3f}|{ball_y_speed:.3f}|{ball_walk_mean:.3f}|{ball_walk_std:.3f}"
 
         # IMPORTANT: log columns match max_num_obstructions
         obs_slots = []
@@ -1314,18 +1879,32 @@ try:
                 obs_slots.append("")
 
         # Start with the header
-        row = [
-            frame_idx,
-            t_global,
-            window_deg_range,
-            f"{cm_to_deg(mouse_center_cm):.2f}",
-            (current_region_name if current_region_name is not None else ''),
-            f"{scenery_speed_cm_s:.3f}",
-            reward_state_now,
-            reward_amount,
-            running_tick_sum,
-            wheel_is_stationary
-        ]
+        t_global = f"{(perf_counter() - sync_start_ts):.6f}" if sync_start_ts is not None else ''
+        if DO_EPHYS:
+            with prbs_shared.get_lock():
+                prbs_val = int(prbs_shared.value)
+                row = [
+                    prbs_val,
+                    frame_idx,
+                    t_global,
+                    window_deg_range,
+                    f"{cm_to_deg(mouse_center_cm):.2f}",
+                    (current_region_name if current_region_name is not None else ''),
+                    f"{scenery_speed_cm_s:.3f}",
+                    reward_state_now,
+                    reward_amount
+                ]
+        else:
+            row = [
+                frame_idx,
+                t_global,
+                window_deg_range,
+                f"{cm_to_deg(mouse_center_cm):.2f}",
+                (current_region_name if current_region_name is not None else ''),
+                f"{scenery_speed_cm_s:.3f}",
+                reward_state_now,
+                reward_amount
+            ]
         row += enc_cols
         row.append(gain_col)
         row += slot_cells
@@ -1341,6 +1920,7 @@ try:
         #### By Shizhao Liu 02/26/26: moved this after logging so that the last state of a ball is saved
         for bi in sorted(remove_indices, reverse=True):
             balls.pop(bi)
+            new_ball = True
 
         
         # =================
@@ -1384,12 +1964,40 @@ finally:
             print(f"[INFO] Closed Arduino serial on {ARDUINO_PORT}", flush=True)
         except Exception:
             pass
-   
+    if DO_EPHYS:
+        print("Session complete. Performing cleanup.")
+        prbs_running_event.clear()
+        if prbs_thread is not None:
+            prbs_thread.join(timeout=1.0)
+        try:
+            bpod.close()
+        except Exception:
+            pass
     # ==== Count and print how much reward the animal got
     [total_reward, n_rewarded_trials, has_amount] = count_reward(SYNC_LOG_FILENAME)
-    #if has_amount:
     print(f"Total reward amount: {total_reward}")
     print(f"Number of rewarded trials: {n_rewarded_trials}")
+
+    performance_results = analyze_pps_behav(session_dir, prefix="sync_log_wheelmove")
+    new_params          = update_config_pps_behav(EXP_CONFIG_FILENAME, performance_results)
+    if ctx is not None:
+        # mgr.finalize_unanalyzed_session(
+        #     ctx,
+        #     append_datarecord_row=None,
+        #     transfer_to_nas=True,
+        #     delete_local=True,
+        # )
+        mgr.finalize_session(
+            ctx,
+            performance = performance_results,
+            next_session_parameters = new_params,
+            append_datarecord_row = None,
+            transfer_to_nas = True,
+            delete_local = True,
+            mark_analyzed = True)
+        
+    #if has_amount:
+
     # elseif len()
     #     print(f"Total reward amount: {n_rewarded_trials} * {REWARD_TARGET} = {n_rewarded_trials * REWARD_TARGET}")
 

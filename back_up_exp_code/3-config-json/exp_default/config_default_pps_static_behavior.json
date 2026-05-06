@@ -1,0 +1,71 @@
+{
+    "experiment": {
+    "_comment": "Experiment-specific defaults. This section should be heavily customized for each task.",
+    "RUNTIME_TIMEOUT_MINUTES": 60.0,  
+    "BALL_FALL_SPEED_CM_S": 40.0,
+    "WHEEL_GAIN_CM_PER_TICK": 0.1, 
+    "SUCCESS_EDGE_TOLERANCE_RANGE": [-9.0, 9.0],
+    "WARMUP_S": 10.0,                 
+    "STARTUP_WAIT_S": 3.0,  
+    "LOG_FLUSH_INTERVAL_FRAMES": 600,
+    "SPACE_DEGREES" : 360.0
+  },
+
+  "spawn":{
+    "_comment": "Control the spawning behavior",
+    "CIRCLE_RADIUS_CM_LIST": [3.0, 1.5], 
+    "SPAWN_DISTRIBUTION": "gaussian",  
+    "SPAWN_GAUSS_CENTER_LIST": [-15.0, -10.0, 10.0, 15.0],
+    "SPAWN_GAUSS_SIGMA_CM":  0,     
+    "SPAWN_GAUSS_RESAMPLE_MAX":  50,    
+    "SPAWN_GAUSS_CLAMP_TO_SCREEN": true,
+    "SPAWN_Y_OFFSET":   50.0,
+    "SPAWN_ONLY_STATIONARY": true, 
+    "STATIONARY_INTERVAL":  500.0, 
+    "STATIONARY_TOLERANCE": 4,
+    "SPAWN_INTERVAL_RANGE": [0.5, 2.0],
+    "BALL_OPACITY": 1.0,                 
+    "BALL_FLICKER_DURATION": null,      
+    "BALL_FLICKER_INTERVAL": null,      
+    "MULTIPLE_BALLS": false,
+    "MULTIPLE_BALLS_SPAWN_INTERVAL":[0.5, 1.0],
+    "DEFAULT_LOG_MAX_BALLS": 10,
+    "MAX_NUM_BALLS": 10
+  },
+
+  "obstruction":{
+    "_comment": "Control the obstruction",
+    "SCREEN_EDGE_OBSTRUCTION": true,
+    "SPAWN_OBSTRUCTIONS": false,     
+    "OBSTRUCTION_WIDTH_CM": 6.0,           
+    "OBSTRUCTION_HEIGHT_CM": 1.0,          
+    "OBSTRUCTION_Y_DIST_RANGE":[4.0, 9.0], 
+    "OBSTRUCTION_Y_BUFFER": 5.0,            
+    "OBSTRUCTION_REGEN_TIME": 10.0,         
+    "OBSTRUCTION_NUM": 3,               
+    "OBSTRUCTION_MIN_CENTER_DIST_X": 5.0   
+  },
+  
+  "region_1": {
+    "_comment":"Control the property of region1",
+    "DEG_RANGE":[0, 360],
+    "GAIN": 1,
+    "COLOR": "black",
+    "PROB_SPAWN": 1,
+    "SPAWN_FUNCTION": null,
+    "LINEAR_VELOCITY": null,
+    "PATCH_SHAPE": "square",
+    "PATCH_FRACTION": 0.15,
+    "PATCH_SIZE_CM": 4.0,
+    "TEMPORAL_VISIBILITY": 100.0,
+    "TEMPORAL_STIMULUS_VISIBLE":false,
+    "SPATIAL_VISIBILITY":false,
+    "SPATIAL_STIMULUS_VISIBLE":false},
+
+  "reward": {
+    "_comment": "Reward control. If use_rig_calibration is true, the script will ask the server to convert target_reward_ul into reward_open_duration_ms using the rig calibration.",
+    "REWARD_UNIT": 3.0,
+    "REWARD_TARGET_COEF_LIST": [1.5, 1.0, 1.0, 1.5]
+  }
+
+}

@@ -1,0 +1,13 @@
+{
+    "experiment": {
+    "VELOCITY_THRESHOLD": 10.0,  
+    "CHECK_BIN": 2.0,
+    "BREAK_INTERVAL": 3.0            
+  
+  },
+
+  "reward":
+  {"REWARD_TARGET": 4.5}
+
+
+}

@@ -1,0 +1,18 @@
+{
+    "experiment":{
+         "SUCCESS_EDGE_TOLERANCE_RANGE": [-7.5, 7.5]
+    },
+
+    "spawn": {
+        "SPAWN_DISTRIBUTION" : "gaussian",
+        "SPAWN_GAUSS_CENTER_LIST": [-15.0, -10.0, 10.0, 15.0],
+        "CIRCLE_RADIUS_CM_LIST": [3.0, 1.5]
+
+    },
+
+    "reward":{
+         "REWARD_UNIT": 3.0,
+        "REWARD_TARGET_COEF_LIST": [1.5, 1.0, 1.0, 1.5]
+
+    }
+}

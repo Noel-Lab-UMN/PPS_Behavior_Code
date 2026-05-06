@@ -119,4 +119,126 @@ def update_config_move_wheel(previous_config_path, performance_results):
 
     return new_params
     
+
+
+
+
+
+
+
+
+
+def parse_sync_log(csv_file_name, x_unit, column_name='slot_1', file_id=0, spawn_offset=0):
+    """
+    Read a csv log and extract spawn_id, x_deg, y_cm, is_visible
+    from the column containing 'spawn_id|x_deg|y_cm|is_visible|ball_radius'.
     
+    Returns a dataframe with parsed variables.
+    """
+
+    df = pd.read_csv(csv_file_name)
+
+    # drop the empty columns
+    ball_col = df[column_name].dropna()
+    ball_col = ball_col[ball_col.astype(str).str.strip() != '']
+   
+    # split into up to 7 pieces
+    ball_data = ball_col.str.split('|', expand=True, n=6)
+
+    n_cols = ball_data.shape[1]
+
+    if n_cols < 5:
+        raise ValueError(
+            f"{csv_file_name}: expected at least 5 fields in {column_name}, got {n_cols}"
+        )
+
+    # ---------- identify format ----------
+    # old: spawn_id|x_deg/x_cm|y_cm|is_visible|ball_radius
+    # new: spawn_id|x_deg/x_cm|y_cm|radius|contrast|velocity|...
+    if n_cols >= 7:
+        file_format = 'new'
+    else:
+        # if only 5 columns, try to infer from column 4
+      
+        file_format = 'old'
+    ### we don
+    ball_data = ball_data.iloc[:, :5]  
+    match file_format:
+        case 'old':
+            
+            # rename columns
+            match x_unit:
+                case 'deg':
+                    ball_data.columns = ['spawn_id', 'x_deg', 'y_cm', 'is_visible','ball_radius']
+                    ball_data['x_deg']          = ball_data['x_deg'].astype(float)
+                case 'cm':
+                    ball_data.columns = ['spawn_id', 'x_cm', 'y_cm', 'is_visible','ball_radius']
+                    ball_data['x_cm']          = ball_data['x_cm'].astype(float)
+
+            # convert types
+            ball_data['is_visible']     = ball_data['is_visible'].astype(bool)
+            # so that this opacity can be easily used in the same way in the following code.
+            # real replay show always have opacity information. If want to generate new habituation trajectories with lower opacity, makes sure to include this in MATLAB code
+            ball_data['opacity']        = ball_data['is_visible'] 
+        case 'new':
+            match x_unit:
+                case 'deg':
+                    ball_data.columns = ['spawn_id', 'x_deg', 'y_cm','ball_radius','opacity']
+                    ball_data['x_deg']          = ball_data['x_deg'].astype(float)
+                case 'cm':
+                    ball_data.columns = ['spawn_id', 'x_cm', 'y_cm', 'ball_radius','opacity']
+                    ball_data['x_cm']          = ball_data['x_cm'].astype(float)
+             # convert types
+            
+            ball_data['opacity']        = ball_data['opacity'].astype(float)
+    
+    ball_data['spawn_id']       = ball_data['spawn_id'].astype(int)
+    ball_data['y_cm']           = ball_data['y_cm'].astype(float)
+    ball_data['ball_radius']    = ball_data['ball_radius'].astype(float)
+
+    # ===== NEW LINES =====
+    ball_data['reward_state'] = df.loc[ball_data.index, 'reward_state']
+    ball_data['reward_amount'] = df.loc[ball_data.index, 'reward_amount']
+
+    # new
+    ball_data['source_file'] = os.path.basename(csv_file_name)
+    ball_data['file_id'] = file_id
+    ball_data['spawn_id_global'] = ball_data['spawn_id'] + spawn_offset
+
+    return ball_data
+
+def load_all_replay_data(csv_file_name_list, x_unit, column_name='slot1'):
+    all_data = []
+    spawn_offset = 0
+
+    for file_id, csv_path in enumerate(csv_file_name_list):
+        one = parse_sync_log(
+            csv_path,
+            column_name=column_name,
+            x_unit=x_unit,
+            file_id=file_id,
+            spawn_offset=spawn_offset
+        )
+        all_data.append(one)
+
+        if len(one) > 0:
+            spawn_offset = int(one['spawn_id_global'].max())
+
+    if len(all_data) == 0:
+        raise ValueError("No replay data loaded.")
+
+    ball_data_all = pd.concat(all_data, axis=0)
+    spawn_groups = list(ball_data_all.groupby('spawn_id_global', sort=False))
+    return ball_data_all, spawn_groups
+
+def deg_to_screen_cm(deg, space_cm):
+    d = (deg + 180) % 360 - 180
+    d_cm = d / space_cm * space_cm
+    return d_cm
+
+def calculate_PPS_percentages(spawn_groups):
+
+
+
+
+def calculate_PPS_z_scores(spawn_groups):

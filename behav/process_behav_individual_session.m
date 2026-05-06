@@ -7,12 +7,13 @@ close all
 global PPS_global
 generate_PPS_global()
 %% experiment date and subject code
-subjectCode = 'LSZ_practice_5_violet';
-do_replace    = true; 
+subjectCode = 'GD_4_mint';
+do_replace    = false; 
 doPlot      = false;
 
-eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
-%session_list = {'20260402'};
+eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+%session_list = {'20260422';'20260423';'20260424'};
+
 
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
 if ~isfolder(save_folder)
@@ -31,10 +32,18 @@ end
         continue
     end
     %% read the json file and the csv file
-    meta_folder = fullfile('../../meta_data_local/', [subjectCode,'_',exp_date]);
+    meta_folder = fullfile(sprintf('../../meta_data_local/%s',subjectCode), [subjectCode,'_',exp_date]);
     EXP_CONFIG = util_pps.read_json_config(meta_folder, subjectCode, exp_date);
     behav_data = util_pps.read_csv_behav_data(meta_folder, EXP_CONFIG);
     
+    if strcmp(subjectCode, 'LSZ_practice_5_violet') & ismember(exp_date, {'20260422';'20260423';'20260424'})
+        %%%% In these sessions, I accidentally set gain to 1 for some
+        %%%% trials. Remove these trials because I don't think they are
+        %%%% useful for any analysis
+        idx_high_gain = [behav_data(:).wheel_gain] == 1;
+        behav_data(idx_high_gain) = [];
+    end
+
     save(data_save_name,'behav_data','EXP_CONFIG');
     %% Distribution of initial x and distribution of end x. Also trajectories
     if doPlot
@@ -43,7 +52,7 @@ end
     end
     
 
- 
+
 
 
     %%%% Probability of getting reward

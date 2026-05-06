@@ -1,0 +1,16 @@
+{
+    "experiment": {
+    "_comment": "Experiment-specific defaults. This section should be heavily customized for each task.",
+    "VELOCITY_THRESHOLD": 20.0,  
+    "CHECK_BIN": 2.0,
+    "BREAK_INTERVAL": 3.0, 
+    "RUNTIME_TIMEOUT_MINUTES": 25.0,                
+    "WHEEL_GAIN_CM_PER_TICK": 0.1,
+    "WARMUP_S": 10.0
+  },
+
+  "reward":
+  {"REWARD_TARGET": 4.5}
+
+
+}

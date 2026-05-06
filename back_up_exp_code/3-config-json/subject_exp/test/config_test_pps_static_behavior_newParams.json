@@ -1,0 +1,49 @@
+{
+     "experiment":{
+      "WHEEL_GAIN_DISTRIBUTION": "choice",
+      "WHEEL_GAIN_CM_PER_TICK_LIST": [0.1],
+      "WHEEL_GAIN_CM_PER_TICK_RANGE": [0.05, 0.2], 
+      "WHEEL_JITTER_COEF": 0, 
+      "WHEEL_JITTER_INTERCEPT": 0, 
+      "NO_JITTER_PORTION": 1,
+      "SUCCESS_EDGE_TOLERANCE_RANGE": [-9.0, 9.0],
+      "WARMUP_S":10.0
+
+     },   
+
+ "spawn":{
+    "_comment": "Control the spawning behavior",
+    "SPAWN_DISTRIBUTION": "choice", 
+    "SPAWN_GAUSS_CENTER_LIST": [-15.0, -10.0, 10.0, 15.0],
+    "SPAWN_UNIFORM_RANGE": [-12.0, 12.0] 
+ },
+
+   "ball":{
+    "BALL_FALL_SPEED_DISTRIBUTION": "choice",
+    "BALL_FALL_SPEED_CM_S_LIST": [30.0],
+    "BALL_FALL_SPEED_CM_S_RANGE": [15.0, 60.0],
+    "CIRCLE_RADIUS_CM_LIST": [1.5, 3.0], 
+    "BALL_OPACITY_DISTRIBUTION": "choice",
+    "BALL_OPACITY_LIST": [1.0],
+    "BALL_OPACITY_RANGE": [1.0],
+    "BALL_OPACITY_LAMBDA": 0.5, 
+    "HIGH_OPACITY_PORTION": 0.1,
+    "BALL_RANDOM_WALK_DISTRIBUTION": "choice",
+    "BALL_RANDOM_WALK_VEL_BIAS_LIST": [1.0, 2.0, 4.0],
+    "BALL_RANDOM_WALK_VEL_STD_LIST": [5, 10, 20, 40, 60],
+    "BALL_RANDOM_WALK_VEL_BIAS_STD": 3.0,
+    "BALL_RANDOM_WALK_VEL_STD_RANGE":[10, 40],
+    "NO_RANDOM_WALK_PORTION": 1,
+    "BALL_FLICKER_DURATION": null,      
+    "BALL_FLICKER_INTERVAL": null      
+  },
+
+    "reward":{
+        "REWARD_FUNCTION": "list",
+        "REWARD_TARGET": 2.0, 
+        "REWARD_UNIT": 3.0,
+        "REWARD_TARGET_COEF_LIST": [1.5, 1.0, 1.0, 1.5]
+
+    }
+
+}

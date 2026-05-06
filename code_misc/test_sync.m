@@ -2,18 +2,27 @@ clear all
 clc
 close all
 %%
-dateStr = '0421';
+dateStr = '0423';
 load_session = 'passive'; % passive or task
 switch dateStr
     case '0420'
-        data_folder = '../test_0420_binary_files';
+        data_folder = '../../test_0420_binary_files';
         task_file_name = 'LSZ_practice_5_violet_test_04_20_2026_g0_t0';
         passive_file_name = 'LSZ_practice_5_violet_test_replay_04_20_2026_g0_t0';
     case '0421'
-        data_folder = '../test_0421_binary_files';
+        data_folder = '../../test_0421_binary_files';
         task_file_name = 'LSZ_5_violet_pps_behav_04_21_2026_g1_t0';
         passive_file_name = 'LSZ_5_violet_pps_passive_04_21_2026_g0_t0';
+    case '0422'
+        data_folder = '../../test_0422_binary_files';
+        task_file_name = 'LSZ_practice_5_violet_pps_behav_04_22_2026_g1_t0';
+        passive_file_name = 'LSZ_practice_5_violet_pps_passive_04_22_2026_g0_t0';
+    case '0423'
+        data_folder = '../../test_0423_binary_files';
+        passive_file_name = 'test_0423_passive_g0_t0';
+
 end
+
 
 
 
@@ -85,21 +94,18 @@ for i = 1:numel(file_list)
 
 
 end
+%%
+if ~isempty(NI.exp_onset)
 
-[CSV.prbs_aligned,CSV.trial_onset_aligned] = deal(cell(numel(file_list),1));
-for i = 1:numel(file_list)
-    CSV.prbs_aligned{i} = CSV.prbs{i} + NI.exp_onset(i);
-    CSV.trial_onset_aligned{i} = CSV.trial_onset{i}  + NI.exp_onset(i);
 end
-
-CSV.prbs_alig
-CSV.prbs_aligned        = cat(1, CSV.prbs_aligned{:});
-CSV.trial_onset_aligned = cat(1, CSV.trial_onset_aligned{:});
+% 
+% CSV.prbs                = cat(1, CSV.prbs{:});
+% CSV.trial_onset         = cat(1, CSV.trial_onset{:}); 
 
 %%
 figure;
-subplot(3,1,1)
-histogram(diff(NI.trial_onset) - diff(CSV.trial_onset_aligned));
-p_trial_on = polyfit(NI.trial_onset)
-subplot(3,1,2)
-histogram(diff(NI.prbs)- diff(CSV.prbs_aligned));
+
+histogram(diff(NI.trial_onset) - diff(CSV.trial_onset{1}));
+p_trial_on = polyfit(NI.trial_onset, CSV.trial_onset{1}, 1)
+% subplot(3,1,2)
+% histogram(diff(NI.prbs)- diff(CSV.prbs_aligned));

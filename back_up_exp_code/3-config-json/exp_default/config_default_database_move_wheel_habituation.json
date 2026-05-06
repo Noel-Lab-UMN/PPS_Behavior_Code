@@ -1,0 +1,33 @@
+{
+    "database": {
+    "_comment": "Database/server connection settings. Usually only experiment_id changes between experiments.",
+    "base_url": "http://10.33.132.131:8002",
+    "experiment_id": 4,
+    "require_analyzed_last_session": true,
+    "timeout_s": 10.0
+  },
+
+  "experiment": {
+    "_comment": "Experiment-specific defaults. This section should be heavily customized for each task.",
+    "VELOCITY_THRESHOLD": 20.0,  
+    "CHECK_BIN": 2.0,
+    "BREAK_INTERVAL": 3.0, 
+    "RUNTIME_TIMEOUT_MINUTES": 25.0,                
+    "WHEEL_GAIN_CM_PER_TICK": 0.1,
+    "WARMUP_S": 10.0
+  },
+
+  "paths":{
+    "mouse_record_csv":"Z:\\17. Goal-directed-PPS\\4-documentation\\MouseRecord.csv",
+    "raw_data_dir":  "Z:\\17. Goal-directed-PPS\\1-data\\1-raw\\Subjects",
+    "smb_base_unc": "\\\\noel-nas-001.neuroscience.umn.edu\\Projects\\17. Goal-directed-PPS\\1-data\\1-raw\\Subjects"
+
+  },
+
+  "reward":{
+    "use_rig_calibration": true,
+    "REWARD_TARGET": 4.5
+  }
+
+
+}

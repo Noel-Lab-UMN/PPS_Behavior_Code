@@ -3,7 +3,7 @@ function EXP_CONFIG = read_json_config(meta_folder, subject_code, exp_date)
 config_filename_list = dir(fullfile(meta_folder,sprintf('exp_config_pps_behav_%s_%s_*.json', subject_code, exp_date)));
 if isempty(config_filename_list)
     % older version of file name 
-    config_filename_list = dir(fullfile(meta_folder,sprintf('exp_config_pps_%s_%s_*.json', subject_code, exp_date)));
+    config_filename_list = dir(fullfile(meta_folder,sprintf('exp_config_%s_%s_*.json', subject_code, exp_date)));
 end
 for k = 1:numel(config_filename_list)
     json_name = fullfile(meta_folder, config_filename_list(k).name);
@@ -14,7 +14,6 @@ for k = 1:numel(config_filename_list)
         %%%%% older version
         EXP_CONFIG(k) = process_json_old_version(json_name);
     end
-
 
 end
 
@@ -40,6 +39,14 @@ end
 EXP_CONFIG.FRAME_RATE  = EXP_CONFIG.config.hardware.FRAME_RATE;
 EXP_CONFIG.tolerant_space_cm = EXP_CONFIG.config.experiment.SUCCESS_EDGE_TOLERANCE_RANGE;
 %EXP_CONFIG.REWARD_TARGET  = EXP_CONFIG.config.reward.
+
+
+%%%%% By shizhao liu 04/22, use a threshold to determine if balls are
+%%%%% moved
+if ~isfield(EXP_CONFIG, 'MOVEMENT_THRESHOLD')
+    EXP_CONFIG.MOVEMENT_THRESHOLD = 1.5;
+end
+
 end
 
 function EXP_CONFIG = process_json_old_version(json_name)
@@ -96,5 +103,11 @@ function EXP_CONFIG = process_json_old_version(json_name)
     %EXP_CONFIG.tolerant_space_deg        = tolerant_space_deg;
     EXP_CONFIG.chance_level_null         = chance_level_null;
     EXP_CONFIG.chance_level_random       = chance_level_random;
+
+    %%%%% By shizhao liu 04/22, use a threshold to determine if balls are
+    %%%%% moved
+    if ~isfield(EXP_CONFIG, 'MOVEMENT_THRESHOLD')
+        EXP_CONFIG.MOVEMENT_THRESHOLD = 1.5;
+    end
 
 end

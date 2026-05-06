@@ -7,7 +7,7 @@ close all
 %%%% (2) MAD
 %%%% (3) percent correct conditioned on initial left/right. any bias?
 %%
-subjectCode = 'LSZ_practice_5_violet';
+subjectCode = 'GD_3_pink';
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
 fig_save_folder = fullfile('../../figures/behav/subject_timecourses/', subjectCode);
 if ~isfolder(fig_save_folder)
@@ -17,7 +17,7 @@ end
 global PPS_global
 generate_PPS_global();
 
-eval(sprintf('session_list = PPS_global.%s.session_list.two_centers;',subjectCode));
+eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
 
 behav_results_summary = util_pps.load_behav_results_summary(save_folder, subjectCode, session_list);
 

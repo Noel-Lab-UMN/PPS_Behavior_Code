@@ -1,0 +1,35 @@
+{
+    "hardware": {
+    "_comment": "Rig-specific hardware settings. Put COM ports, display geometry, device names, and similar here.",
+    "RIG_NAME": "PPS_recording_Rig_1",
+    "ENC_SERIAL_PORT": "COM20",
+    "ARDUINO_PORT": "COM12",
+    "SCREEN_ID": 1,
+    "SCREEN_WIDTH_CM": 68.57,
+    "SCREEN_HEIGHT_CM": 121.9,
+    "SCREEN_PIX": [1080, 1920],
+    "ARDUINO_BAUD": 9600,
+    "ARDUINO_OPEN_ON_START": true,   
+    "MIN_INTER_REWARD_S": 0.15,
+    "FRAME_RATE": 100,
+    "WRAP_DETECT_TICKS": 800,
+    "STARTUP_WAIT_S": 3.0,
+    "LOG_FLUSH_INTERVAL_FRAMES": 600,
+    "REWARD_AMOUNT_LIST": [1.0, 1.5, 2.0, 3.0, 4.5],
+    "REWARD_DURATION_MS_LIST":  [10.16, 11.38, 12.08, 15.74, 21.77] 
+  },
+
+  "prbs":{
+  "PRBS_MIN_INTERVAL": 2.0,
+  "PRBS_MAX_INTERVAL": 5.0,
+  "BPOD_SERIAL_PORT": "COM16",
+  "REWARD_CHANNEL": 3,
+  "PRBS_CHANNEL" : 2,
+  "TRIAL_CHANNEL": 1,
+  "TRIAL_START_SIGNAL_DURATION": 0.1,
+  "REWARD_SIGNAL_DURATION": 0.05
+  }
+
+
+
+}

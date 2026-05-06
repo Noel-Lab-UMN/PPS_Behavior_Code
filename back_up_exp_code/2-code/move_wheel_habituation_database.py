@@ -93,6 +93,7 @@ except Exception:
     sys.exit(1)
 
 rig_name = selected_option
+rig_id   = selected_index
 
 
 mouse_options, option_to_mouse_id = mgr.load_mice_options(
@@ -222,7 +223,7 @@ if reward_conf.get("use_rig_calibration", True):
         for target_reward_ul in REWARD_AMOUNT_LIST:
             policy = mgr.apply_reward_policy(
                 session_parameters,
-                rig_id=db_conf.get("rig_id"),
+                rig_id = rig_id,
                 target_reward_ul_override= target_reward_ul,
                 enabled=True,
                 put_under_key="reward",
@@ -241,6 +242,7 @@ if reward_conf.get("use_rig_calibration", True):
     except DBClientError as e:
         print(f"[db] WARNING: could not fetch reward policy: {e}")
         REWARD_DURATION_MS_LIST = []
+
 
 reward_duration_dict   = dict(zip(REWARD_AMOUNT_LIST, REWARD_DURATION_MS_LIST))
 config_to_save["config"]["reward"]["REWARD_DURATION_MS_LIST"] = REWARD_DURATION_MS_LIST
@@ -454,7 +456,7 @@ try:
         mouse_id=mouse_id,
         experiment_name = exp_name,
         experiment_id = db_conf["experiment_id"],
-        rig_id = db_conf.get("rig_id"),
+        rig_id = rig_id,
         parameters = session_parameters,
         fallback_session_num=1,
         session_at=datetime.now(ZoneInfo("America/Chicago")),

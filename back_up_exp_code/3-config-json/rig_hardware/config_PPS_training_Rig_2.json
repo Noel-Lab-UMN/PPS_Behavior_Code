@@ -1,0 +1,27 @@
+{
+   "database": {
+    "rig_id": 3
+  },
+
+  "hardware": {
+    "_comment": "Rig-specific hardware settings. Put COM ports, display geometry, device names, and similar here.",
+    "RIG_NAME": "PPS_training_Rig_2",
+    "rig_id":3,
+    "ENC_SERIAL_PORT": "COM7",
+    "ARDUINO_PORT": "COM4",
+    "SCREEN_ID": 1,
+    "SCREEN_WIDTH_CM": 55.88,
+    "SCREEN_HEIGHT_CM": 96.26,
+    "SCREEN_PIX": [1080, 1920],
+    "ARDUINO_BAUD": 9600,
+    "ARDUINO_OPEN_ON_START": true,   
+    "MIN_INTER_REWARD_S": 0.15,
+    "FRAME_RATE": 60,
+    "WRAP_DETECT_TICKS": 800,
+    "STARTUP_WAIT_S": 3.0,
+    "LOG_FLUSH_INTERVAL_FRAMES": 600,
+    "REWARD_AMOUNT_LIST":  [1.0, 1.5, 2.0, 3.0, 4.5],
+    "REWARD_DURATION_MS_LIST": [9.35, 10.60, 11.93, 14.93, 20.61]
+  }
+
+}

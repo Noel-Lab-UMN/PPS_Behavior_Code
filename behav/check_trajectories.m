@@ -2,7 +2,7 @@ clear all
 clc
 close all
 %%
-subjectCode = 'LSZ_practice_5_violet';
+subjectCode = 'GD_3_pink';
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
 fig_save_folder = fullfile('../../figures/behav/subject_timecourses/', subjectCode);
 if ~isfolder(fig_save_folder)
@@ -12,19 +12,19 @@ end
 global PPS_global
 generate_PPS_global();
 
-eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
+eval(sprintf('session_list = PPS_global.%s.session_list.all;',subjectCode));
 
 nSession = numel(session_list);
 
 figure
 for k  = 1:nSession
-    subplot(2,3,k)
+    subplot(4,5,k)
     date_str = session_list{k};
     data_folder = sprintf('../../results/behav/pps_processed/%s',subjectCode);
     
     load(fullfile(data_folder, sprintf('behav_data_PPS_%s_%s',subjectCode,date_str)));
     
-    behav_data(1) = [];
+    %behav_data(1) = [];
     %%%%
     idx_moved       = [behav_data(:).is_moved];
     idx_rewarded    = [behav_data(:).rewarded];

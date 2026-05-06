@@ -1,0 +1,15 @@
+{
+    "experiment": {
+    "RUNTIME_TIMEOUT_MINUTES": 25.0,                
+    "WHEEL_GAIN_CM_PER_TICK": 0,
+    "DO_READ_JSON": false,
+    "REPLAY_TYPE": "real_replay",
+    "COLUMN_TO_READ": "slot1",
+    "INTER_SPAWN_INTERVAL": 0.5,
+    "STATIONARY_INTERVAL": 500.0, 
+    "STATIONARY_TOLERANCE": 4,
+    "SPACE_DEGREES": 360.0,
+    "WARMUP_S": 1.0,
+    "MOVEMENT_THRESHOLD" : 1.0
+  }
+}

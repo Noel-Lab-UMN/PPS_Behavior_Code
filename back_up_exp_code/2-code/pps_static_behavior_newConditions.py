@@ -78,12 +78,12 @@ default_exp_config = load_json(EXP_CONFIG_PATH)
 config_all = deep_update(hardware_config, default_exp_config)
 
 ANIMAL_CONFIG_PATH = os.path.join(home_path,f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_pps_static_behavior_newParams.json")
-if os.path.exists(ANIMAL_CONFIG_PATH):
-    animal_config = load_json(ANIMAL_CONFIG_PATH)
-    config_all = deep_update(config_all, animal_config)
-    print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
-else:
-    print(f"[WARNING] {ANIMAL_CONFIG_PATH} not found. Using default parameters only.")
+#if os.path.exists(ANIMAL_CONFIG_PATH):
+animal_config = load_json(ANIMAL_CONFIG_PATH)
+config_all = deep_update(config_all, animal_config)
+print(f"[INFO] Loaded animal-specific parameters from: {ANIMAL_CONFIG_PATH}")
+# else:
+#     print(f"[WARNING] {ANIMAL_CONFIG_PATH} not found. Using default parameters only.")
 
 
 rig_conf                    = config_all["hardware"]
@@ -1135,23 +1135,7 @@ def generate_obstructions():
 # ============================
 # State & spawn helpers
 # ============================
-mouse_center_cm = SPACE_WIDTH_CM / 2.0
-balls = []
-next_spawn_time = None
-last_spawn_ts = None
-respawn_time = None
-show_success_until = None
-last_spawn_region = None
 
-frame_idx = 0
-clock = core.Clock()
-last_time = clock.getTime()
-scenery_offset_cm = 0.0
-
-global_spawn_id = 0
-sync_start_ts = None
-reward_active_until = 0.0
-reward_state_pulse_pending = False
 
 def wrap_pos(pos, width):
     return pos % width
@@ -1249,7 +1233,7 @@ def spawn_ball_ts(now_ts, win_start, window_intervals, trial_params):
         win.callOnFlip(send_trial_pulse_hw_nonblocking)
     return ball
 
-def initial_spawn(trial_params):
+def initial_spawn(mouse_center_cm, trial_params):
     win_start, win_end = window_start_end(mouse_center_cm, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
     window_intervals = [(win_start, win_start + SCREEN_WIDTH_CM)] if (win_start + SCREEN_WIDTH_CM <= SPACE_WIDTH_CM) else [(win_start, SPACE_WIDTH_CM), (0.0, (win_start + SCREEN_WIDTH_CM) - SPACE_WIDTH_CM)]
     spawn_ball_ts(perf_counter(), win_start, window_intervals, trial_params)
@@ -1335,12 +1319,32 @@ obstruction_rects = [
 # ============================
 # Main loop
 # ============================
-experiment_start_ts = perf_counter()
+mouse_center_cm = SPACE_WIDTH_CM / 2.0
+mouse_center_cm = wrap_pos(mouse_center_cm, SPACE_WIDTH_CM)
+balls = []
+next_spawn_time = 0.0
+last_spawn_ts = None
+respawn_time = None
+show_success_until = None
+last_spawn_region = None
+
+frame_idx = 0
+clock = core.Clock()
+last_time = clock.getTime()
+scenery_offset_cm = 0.0
+
+global_spawn_id = 0
+sync_start_ts = None
+reward_active_until = 0.0
+reward_state_pulse_pending = False
+
+
 last_obstruction_regen_ts = None
 #### These two variables are for detecting stationary intervals
 delta_tick_history = []
 running_tick_sum = 0.0
 
+experiment_start_ts = perf_counter()
 if DO_EPHYS:
     #bpod = None           # Bpod instance (set in main_session)
     # Initialize Bpod now (inside main) so child processes don't create/initialize Bpod on import
@@ -1376,8 +1380,8 @@ try:
     trial_params = trial_param_sampler.next()
  
 
-    new_ball = False
-    initial_spawn(trial_params)
+    new_ball = True
+    #initial_spawn(mouse_center_cm, trial_params)
 
     while True:
         if new_ball == True:
@@ -1502,13 +1506,13 @@ try:
         ### Detect if wheel is stationary. O
         ### If SPAWN_ONLY_STATIONARY is true, only generate balls when the wheel is relatively stationary
         wheel_is_stationary = False # reset to false unless the below condition is met
-        if (perf_counter() - sync_start_ts) >  (STATIONARY_INTERVAL / 1000):
+        if (perf_counter() - experiment_start_ts) >  (STATIONARY_INTERVAL / 1000):
             running_tick_sum -= delta_tick_history[0]
             delta_tick_history.pop(0)
         delta_tick_history.append(abs(delta_ticks))
         running_tick_sum += abs(delta_ticks)
 
-        if running_tick_sum < STATIONARY_TOLERANCE and (perf_counter() - sync_start_ts) > (STATIONARY_INTERVAL / 1000): ### stationary enough in the last time window
+        if running_tick_sum < STATIONARY_TOLERANCE and (perf_counter() - experiment_start_ts) > (STATIONARY_INTERVAL / 1000): ### stationary enough in the last time window
             wheel_is_stationary = True
 
         if next_spawn_time is not None and ts >= next_spawn_time:
