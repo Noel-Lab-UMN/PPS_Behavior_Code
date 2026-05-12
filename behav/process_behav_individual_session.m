@@ -7,7 +7,7 @@ close all
 global PPS_global
 generate_PPS_global()
 %% experiment date and subject code
-subjectCode = 'GD_4_mint';
+subjectCode = 'GD_5_grey';
 do_replace    = false; 
 doPlot      = false;
 

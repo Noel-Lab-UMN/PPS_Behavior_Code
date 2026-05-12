@@ -1,4 +1,4 @@
-function behav_data = read_csv_behav_data(meta_folder, EXP_CONFIG)
+function [behav_data, prbs_rising_t] = read_csv_behav_data(meta_folder, EXP_CONFIG)
 MOUSE_NAME = EXP_CONFIG.MOUSE_NAME;
 csv_filename_list = dir(fullfile(meta_folder,sprintf('sync_log_pps_behav_%s*.csv', MOUSE_NAME)));
 if isempty(csv_filename_list)
@@ -9,6 +9,7 @@ if numel(csv_filename_list) ~= numel(EXP_CONFIG)
 end
 behav_data = struct(); 
 N_exist = 0;
+prbs_rising_t = cell(numel(EXP_CONFIG),1);
 for k = 1:numel(EXP_CONFIG)
     csv_filename = sprintf('sync_log_%s_%s_%s.csv',EXP_CONFIG(k).MOUSE_NAME, EXP_CONFIG(k).EXP_DATE, EXP_CONFIG(k).START_TIME_MIN);
     if ~isfile(fullfile(meta_folder,csv_filename))
@@ -23,9 +24,16 @@ for k = 1:numel(EXP_CONFIG)
     opts = setvaropts(opts, "t_global_s", "TreatAsMissing", {'NA','NaN','nan','missing'});
 
     raw_data = readtable(fullfile(meta_folder, csv_filename), opts);
+    
+    %%%%% read prbs if exist
+    if ismember('prbs_val', raw_data.Properties.VariableNames)
+      
+        rising_edges = find(diff(raw_data.prbs_val) == 1) + 1;
+        prbs_rising_t{k} = raw_data.t_global_s(rising_edges);
+    end
 
     %raw_data = readtable(fullfile(meta_folder, csv_filename));
-    raw_data = read_slot(raw_data);
+    raw_data = read_slot_behav(raw_data);
 
     %%% split based on ball ID
     ball_list = unique(raw_data.slot1_spawn_id(~isnan(raw_data.slot1_spawn_id)));
@@ -90,6 +98,7 @@ for k = 1:numel(EXP_CONFIG)
 
         behav_data(n).frame_idx     = raw_data.frame_idx(idx);
         behav_data(n).t_global_s    = raw_data.t_global_s(idx);
+        behav_data(n).t_global_s_onset = behav_data(n).t_global_s(1);
         % behav_data(n).mouse_center_deg = raw_data.mouse_center_deg(idx);  % mouse's degree with respect to the vitual world. Not very useful
         
         
@@ -110,8 +119,14 @@ for k = 1:numel(EXP_CONFIG)
         %behav_data(n).delta_hori_deg    = behav_data(n).delta_hori_cm  * (EXP_CONFIG(k).SPACE_DEGREES / EXP_CONFIG(k).SPACE_WIDTH_CM); 
         
         %%%% extract random walk: delta_x - delta_cm_wheel
-        behav_data(n).x_random_walk     = behav_data(n).x_rel_cm - behav_data(n).delta_hori_cm;
+        if behav_data(n).ball_random_bias == 0 & behav_data(n).ball_random_std == 0 
+            %%% In theory 
+            behav_data(n).x_random_walk  = zeros(size(behav_data(n).delta_hori_cm));
+        else
 
+            behav_data(n).x_random_walk     = diff([behav_data(n).x_rel_cm]) - (behav_data(n).delta_hori_cm(2:end));
+            behav_data(n).x_random_walk     = [0; behav_data(n).x_random_walk]; % just to make array size consistent
+        end
 
         if isfield(EXP_CONFIG(k), 'CIRCLE_RADIUS_CM')
             radius = EXP_CONFIG(k).CIRCLE_RADIUS_CM;
@@ -217,13 +232,14 @@ for k = 1:numel(EXP_CONFIG)
     end
     N_exist =  numel(behav_data); % how many balls already existed in the struct
 end
+prbs_rising_t = cat(1,prbs_rising_t{:});
 end
 
 
 
 %% helper functions
 
-function data = read_slot(data)
+function data = read_slot_behav(data)
     %%%%%% Convert the slot column into numerical variables
     slot = data.("slot1");        % string array or cellstr
     slot = string(slot);           % ensure it's string type

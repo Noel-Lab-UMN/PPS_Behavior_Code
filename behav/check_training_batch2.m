@@ -1,6 +1,6 @@
 clear all
 clc
-close all
+%close all
 
 global PPS_global
 generate_PPS_global();
@@ -106,7 +106,7 @@ ylabel('P(reward|move)'); xlabel('Session index')
 %%
 color_list = {'red';'blue';'magenta';'cyan';'black'};
 figure;
-pair_str = {'small';'big'};
+pair_str = {'far';'near'};
 for i = 1:numel(subjectCode_list)
     subplot(5,2,(i-1)*2+1); hold on
     idx = strcmp({results_summary(:).subjectCode}, subjectCode_list{i});
@@ -137,7 +137,7 @@ for i = 1:numel(subjectCode_list)
     
 
     set(gca, 'fontsize', 16);
-    ylabel('P(move|reward)'); xlabel('Session index')
+    ylabel('P(reward|move)'); xlabel('Session index')
 
 end
 %%

@@ -1,4 +1,19 @@
 function h = plot_ball_trajectories(behav_data, idx_plot, EXP_CONFIG, plotOptions)
+
+%%%%% default settings
+if ~isfield(plotOptions, 'style')
+    plotOptions.style = 'avg';
+end
+if ~isfield(plotOptions, 'doExample')
+    plotOptions.doExample = false;
+end
+if ~isfield(plotOptions, 'doSEM')
+    plotOptions.doSEM = true;
+end
+
+if ~isfield(plotOptions, 'color')
+    plotOptions.color = 'black';
+end
 hold on
 switch plotOptions.style
     case 'individual'
@@ -33,11 +48,14 @@ switch plotOptions.style
         
         h = plot(x_cm_mean, yCommon, 'LineWidth', 2, 'color', plotOptions.color); hold on
         
-        fill([x_left, fliplr(x_right)], ...
-             [yCommon,      fliplr(yCommon)], ...
-             plotOptions.color, ...
-             'FaceAlpha', 0.3, ...
-             'EdgeColor', 'none');
+        if plotOptions.doSEM
+            fill([x_left, fliplr(x_right)], ...
+                 [yCommon,      fliplr(yCommon)], ...
+                 plotOptions.color, ...
+                 'FaceAlpha', 0.3, ...
+                 'EdgeColor', 'none');
+        end
+
 
         if plotOptions.doExample
             %delta = 10;
@@ -65,7 +83,7 @@ end
 xlim([-EXP_CONFIG(1).SCREEN_WIDTH_CM / 2, EXP_CONFIG(1).SCREEN_WIDTH_CM / 2])
 set(gca,'fontsize',16);
 xlabel('x-pos-cm'); ylabel('y-pos-cm');
-title(sprintf('%s: %d/%d', plotOptions.titleStr, numel(idx_plot), numel(behav_data)));
+%title(sprintf('%s: %d/%d', plotOptions.titleStr, numel(idx_plot), numel(behav_data)));
 
 
 ball_r = 3;
@@ -76,7 +94,7 @@ line([EXP_CONFIG(1).tolerant_space_cm(2), EXP_CONFIG(1).tolerant_space_cm(2)], [
 line([EXP_CONFIG(1).tolerant_space_cm(1), EXP_CONFIG(1).tolerant_space_cm(2)], [ball_r,ball_r], ...
     'linestyle','--','color','red','linewidth',1.5);
 
-plot(0,0,'Marker','^','Color','blue','MarkerSize',10)
+plot(0,0,'Marker','^','Color','blue','MarkerSize',10);
 
 
 end

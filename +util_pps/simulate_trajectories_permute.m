@@ -1,16 +1,18 @@
-function [behav_data_simulated, simu_stats] = simulate_trajectories_permute(behav_data, EXP_CONFIG, do_permute_sign, do_moved)
+function [behav_data_simulated, simu_stats] = simulate_trajectories_permute(behav_data, idx_run, EXP_CONFIG, do_permute_sign, do_moved)
 
 if do_moved
     is_moved = [behav_data(:).is_moved];
-    idx_sample = find(is_moved);
+    idx_moved = find(is_moved);
+    idx_sample = intersect(idx_moved, idx_run);
 else
-    idx_sample = [1:numel(behav_data)];
+    idx_sample = idx_run;
 end
 
 nTrial = numel(idx_sample);
 for n = 1:nTrial
     i = idx_sample(n);
     x_start = behav_data(i).initial_x_rel_cm;
+ 
     idx_sample_trial = randsample(idx_sample, 1);
     
     reached_bottom = behav_data(idx_sample_trial).reached_bottom;
@@ -31,7 +33,21 @@ for n = 1:nTrial
         delta_hori_sampled = delta_hori_sampled_abs .* delta_hori_sampled_sign_permute;
         
     end
-    x_trajectory = x_start + cumsum(delta_hori_sampled);
+    %%%% 05/07: also consider random walk
+    x_random_walk = zeros(size(delta_hori_sampled)); % make sure array size is consistent
+    if isfield(behav_data(i), 'x_random_walk')
+         x_random_walk_original = behav_data(i).x_random_walk;
+        if numel(delta_hori_sampled) > numel(x_random_walk_original)
+            % first random walk, then non;
+            x_random_walk(1:numel(x_random_walk_original)) = x_random_walk_original;
+        else
+            % just use part of it
+            x_random_walk = x_random_walk_original(1:numel(delta_hori_sampled));
+        end
+       
+    end
+
+    x_trajectory = x_start + cumsum(delta_hori_sampled) + cumsum(x_random_walk);
 
     collided = 0;
     rewarded = 0;

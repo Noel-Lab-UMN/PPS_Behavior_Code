@@ -1,13 +1,13 @@
 clear all
 clc
-close all
+%close all
 %%%% This script loads preprocessed data for each animal and plots the
 %%%% learning trajectores of some behavioral features:
 %%%% (1) percent correct relative to chance level
 %%%% (2) MAD
 %%%% (3) percent correct conditioned on initial left/right. any bias?
 %%
-subjectCode = 'GD_3_pink';
+subjectCode = 'GD_1_red';
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
 fig_save_folder = fullfile('../../figures/behav/subject_timecourses/', subjectCode);
 if ~isfolder(fig_save_folder)
@@ -53,12 +53,12 @@ subplot(2,2,3);hold on
 fieldname = 'zscore_reward';
 errorbar_option = 'none';
 h(1) = fig_pps.plot_sessions_timecourse(behav_results_summary, fieldname, session_list, errorbar_option);
-set(h(1),'color', [0.5,0.5,0.5]);
+set(h(1),'color', 'black');
 title(subjectCode,'Interpreter','none')
 fieldname = 'zscore_reward_moved';
 errorbar_option = 'none';
 h(2) = fig_pps.plot_sessions_timecourse(behav_results_summary, fieldname, session_list, errorbar_option);
-set(h(2),'color', [0.1,0.1,0.1]);
+set(h(2),'color', 'blue');
 ylabel('Z-score')
 legend('All trials','Moved trials')
 sgtitle(subjectCode,'Interpreter','none','fontweight','bold','fontsize',20)

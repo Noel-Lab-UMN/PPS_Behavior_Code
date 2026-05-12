@@ -10,12 +10,13 @@ function  permute_chance_level = get_chance_level_permute(behav_data, EXP_CONFIG
 [p_reward_permute_moved, MAD_rewarded_permute_moved, MAD_reachbottom_permute_moved] = ...
     deal(zeros(nPermute, 1));
 
+idx_run = [1:numel(behav_data)];
 
 for n = 1:nPermute
  
     do_permute_sign = 0;
     do_moved        = 0;
-    [~, simu_stats]             = util_pps.simulate_trajectories_permute(behav_data, EXP_CONFIG, do_permute_sign, do_moved);
+    [~, simu_stats]             = util_pps.simulate_trajectories_permute(behav_data, idx_run, EXP_CONFIG, do_permute_sign, do_moved);
     p_reward_permute(n)         = simu_stats.p_rewarded;
     MAD_rewarded_permute(n)     = simu_stats.MAD_rewarded;
     MAD_reachbottom_permute(n)  = simu_stats.MAD_reachbottom;
@@ -23,7 +24,7 @@ for n = 1:nPermute
     
     do_permute_sign = 1;
     do_moved        = 0;
-    [~, simu_stats]   = util_pps.simulate_trajectories_permute(behav_data, EXP_CONFIG, do_permute_sign, do_moved);
+    [~, simu_stats]   = util_pps.simulate_trajectories_permute(behav_data, idx_run, EXP_CONFIG, do_permute_sign, do_moved);
 
     p_reward_permute_sign(n)         = simu_stats.p_rewarded;
     MAD_rewarded_permute_sign(n)     = simu_stats.MAD_rewarded;
@@ -32,7 +33,7 @@ for n = 1:nPermute
 
     do_permute_sign = 0;
     do_moved        = 1;
-    [~, simu_stats]             = util_pps.simulate_trajectories_permute(behav_data, EXP_CONFIG, do_permute_sign, do_moved);
+    [~, simu_stats]                   = util_pps.simulate_trajectories_permute(behav_data, idx_run, EXP_CONFIG, do_permute_sign, do_moved);
     p_reward_permute_moved(n)         = simu_stats.p_rewarded;
     MAD_rewarded_permute_moved(n)     = simu_stats.MAD_rewarded;
     MAD_reachbottom_permute_moved(n)  = simu_stats.MAD_reachbottom;
