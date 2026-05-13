@@ -11,7 +11,6 @@ function ks_data = run_load_kilosort_data(data_folder)
     ephysRawFile = fullfile(data_folder, ephysRawFile_list(1).name);
 
     kilo_save_name = fullfile(data_folder,'%s_kilosorted.mat',data_folder);
-    individual_ks_data_folder  = fullfile(data_folder, 'ksdata_individual_cluster');
     finish_flag_name = fullfile(individual_ks_data_folder,'organized_flag.txt');
     %% Parameters
     prs.fs = 30000;
@@ -67,9 +66,9 @@ function ks_data = run_load_kilosort_data(data_folder)
     %% save individual clusters
     if ~isfile(finish_flag_name)
         load(kilo_save_name);
-        
+        individual_ks_data_folder  = fullfile(data_folder, 'ksdata_individual_cluster');
         if ~isfile(individual_ks_data_folder)
-            mkdir(individual_ks_data_folder);
+        mkdir(individual_ks_data_folder);
         end
     
         unique_clusters = unique(ks_data.spike_clusters);

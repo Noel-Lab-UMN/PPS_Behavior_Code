@@ -63,23 +63,21 @@ if flag_trial_onset_equal
     x           = NI_timing.trial_onset(1:nTrial_behav);
     y           = [behav_data(:).t_global_s_onset];
     align_time.p_behav     = polyfit(x, y, 1);
-    align_time.y_max_behav = [behav_data(end).t_global_s(end)];
+    align_time.y_max_behav = [behav_data(end).t_global_s_onset];
 
     x           = NI_timing.trial_onset(nTrial_behav+1:end);
     y           = [passive_data(:).t_global_s_onset];
     align_time.p_passive   = polyfit(x, y, 1);
-    align_time.y_max_passive = [passive_data(end).t_global_s(end)];
+    align_time.y_max_passive = [passive_data(end).t_global_s_onset];
 elseif ~flag_trial_onset_equal & flag_prbs_equal
     % Otherwise use prbs
     x       = NI_timing.prbs_rising(1:nPrbs_behav);
     y       = prbs_behav_rising;
-    align_time.p_behav = polyfit(x, y, 1);
-    align_time.y_max_behav = [behav_data(end).t_global_s(end)];
+    p_behav = polyfit(x, y, 1);
 
     x       = NI_timing.prbs_rising(nPrbs_behav+1 : end);
     y       = prbs_passive_rising;
-    align_time.p_passive = polyfit(x,y,1); 
-    align_time.y_max_passive =  [passive_data(end).t_global_s(end)];
+    p_passive = polyfit(x,y,1); 
 
 
 elseif ~flag_trial_onset_equal & ~flag_prbs_equal
@@ -96,39 +94,11 @@ cluster_list = dir(fullfile(individual_cluster_folder, '*.mat'));
 nCluster = numel(cluster_list);
 
 for i_cluster = 1:nCluster
-    fprintf('align cluster %d/%d \n', i_cluster, nCluster)
-    cluster_file_name = fullfile(individual_cluster_folder, cluster_list(i_cluster).name);
-    load(cluster_file_name);
+    load(fullfile(individual_cluster_folder, cluster_list(i_cluster).name));
     spike_times = neuron.n.st_sec;
 
     %%% align spike_times to behav_data
-    min_spike_time = -5;
-    max_spike_time = align_time.y_max_behav + 10;
-    spike_times_behav = align_time.p_behav(1) * spike_times + align_time.p_behav(2);
-    is_keep = spike_times_behav >= min_spike_time & spike_times_behav <= max_spike_time;
-    spike_times_behav = spike_times_behav(is_keep);
+    spike_times_behav = p_behav(1) * spike_times + p_behav(2);
+
     %%% align spike_times to passive_data
-    min_spike_time = -5;
-    max_spike_time = align_time.y_max_passive + 10;
-    spike_times_passive = align_time.p_passive(1) * spike_times + align_time.p_passive(2);
-    is_keep = spike_times_passive >= min_spike_time & spike_times_passive <= max_spike_time;
-    spike_times_passive = spike_times_passive(is_keep);
-    
-    neuron.n.spike_times_behav = spike_times_behav;
-    neuron.n.spike_times_passive = spike_times_passive;
-
-    save(cluster_file_name, 'neuron');
 end
-
-% %% organize spike data into trial structure
-% neuro_data_behav.spikeTimeMS    = cell(nCluster, nTrial_behav);
-% neuro_data_passive.spikeTimeMS  = 
-% %neuro.spi
-% for i_cluster =  1:nCluster
-%     for i_trial = 1:nTrial_behav
-%         trialOn = behav_data(i_trial).t_global_s_onset;
-% 
-%         spikeTimeMS{i_cluster,i_trial} = 
-% 
-%     end
-% end

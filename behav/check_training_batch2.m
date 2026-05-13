@@ -106,7 +106,7 @@ ylabel('P(reward|move)'); xlabel('Session index')
 %%
 color_list = {'red';'blue';'magenta';'cyan';'black'};
 figure;
-pair_str = {'far';'near'};
+pair_str = {'left';'right'};
 for i = 1:numel(subjectCode_list)
     subplot(5,2,(i-1)*2+1); hold on
     idx = strcmp({results_summary(:).subjectCode}, subjectCode_list{i});

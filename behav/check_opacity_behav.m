@@ -11,7 +11,7 @@ eval(sprintf('session_list_all = PPS_global.%s.session_list.new_params;',subject
 nPermute = 100;
 
 %exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};
-exp_date_list = {'20260506'};
+exp_date_list = {'20260506';'20260511';'20260512'};
 for i = 1:numel(exp_date_list)
     exp_date = exp_date_list{i};
     load(fullfile(data_folder, sprintf('behav_data_PPS_%s_%s', subjectCode, exp_date)));

@@ -2,7 +2,7 @@ clear all
 clc
 close all
 %%
-subjectCode = 'GD_3_pink';
+subjectCode = 'GD_1_red';
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
 fig_save_folder = fullfile('../../figures/behav/subject_timecourses/', subjectCode);
 if ~isfolder(fig_save_folder)
@@ -12,13 +12,14 @@ end
 global PPS_global
 generate_PPS_global();
 
-eval(sprintf('session_list = PPS_global.%s.session_list.all;',subjectCode));
+eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
 
 nSession = numel(session_list);
-
+nRow = floor(sqrt(nSession));
+nCol = ceil(nSession/nRow);
 figure
 for k  = 1:nSession
-    subplot(4,5,k)
+    subplot(nRow,nCol,k)
     date_str = session_list{k};
     data_folder = sprintf('../../results/behav/pps_processed/%s',subjectCode);
     

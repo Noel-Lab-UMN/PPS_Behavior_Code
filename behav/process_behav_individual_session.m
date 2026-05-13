@@ -7,11 +7,11 @@ close all
 global PPS_global
 generate_PPS_global()
 %% experiment date and subject code
-subjectCode = 'GD_5_grey';
+subjectCode = 'GD_1_red';
 do_replace    = false; 
 doPlot      = false;
 
-eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
 %session_list = {'20260422';'20260423';'20260424'};
 
 
