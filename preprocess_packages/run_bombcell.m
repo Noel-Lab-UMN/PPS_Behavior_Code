@@ -1,7 +1,7 @@
 function [qMetric, unitType] = run_bombcell(ephysKilosortPath, ephysRawFile, ephysMetaDir, savePath)
 save_name = fullfile(savePath, 'unitType.mat');
 if ~isfile(save_name) 
-
+    disp("RUNNING BOMBCELL NOW.....")
     mkdir(savePath)
     kilosortVersion = 4;
     gain_to_uV = NaN;
@@ -27,6 +27,7 @@ if ~isfile(save_name)
     save([savePath, '/unitType.mat'], 'unitType');
 
 else
+    disp("LOADING BOMBCELL NOW.....")
     qMetric = parquetread(fullfile(savePath, 'templates._bc_qMetrics.parquet'));
     load(save_name);
 end

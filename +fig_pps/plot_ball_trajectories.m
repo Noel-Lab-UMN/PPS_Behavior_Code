@@ -67,7 +67,7 @@ switch plotOptions.style
 
             %x_in = x_sample(~is_out,:);
 
-            [~, i_min] = mink(dist_from_mean,10);
+            [~, i_min] = mink(dist_from_mean,5);
 
             for n = 1:numel(i_min)
                 h_e = plot(x_sample(i_min(n),:), yCommon, 'LineWidth', 1, 'color', plotOptions.color);

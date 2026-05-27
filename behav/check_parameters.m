@@ -3,16 +3,67 @@ clc
 close all
 global PPS_global
 generate_PPS_global();
-%%
+%% load and organize results
 
-subjectCode  = 'GD_1_red'; 
-plotIndividual = false;
-switch subjectCode
-    case 'LSZ_practice_5_violet'
-        exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};
-    case 'GD_1_red'
-        exp_date_list = {'20260506'};
+%subjectCode  = 'GD_1_red'; 
+subjectCode = 'LSZ_practice_5_violet';
+%plotIndividual = false;
+
+parameter_option = 'wheel_jitter';
+
+switch parameter_option
+    case 'opacity'
+        x_label_str = 'Opacity';
+        switch subjectCode
+            case 'LSZ_practice_5_violet'
+                exp_date_list = {'20260415';'20260422';'20260423';...
+                    '20260424';'20260428';'20260429';'20260430';'20260501'};
+            case 'GD_1_red'
+                exp_date_list = {'20260506'};
+        end
+    case 'y_vel'
+        x_label_str = 'y-vel';
+        switch subjectCode
+            case 'LSZ_practice_5_violet'
+                exp_date_list = {'20260413';'20260414';'20260422';'20260423';...
+                    '20260424';'20260428';'20260429';'20260430';'20260501'};
+            case 'GD_1_red'
+                exp_date_list = {'20260505'};
+
+        end
+    case 'wheel_gain'
+        x_label_str = 'wheel gain';
+        switch subjectCode
+            case 'LSZ_practice_5_violet'
+                exp_date_list = {'20260417';'20260420';'20260422';'20260423';...
+                    '20260424';'20260428';'20260429';'20260430';'20260501'};
+            case 'GD_1_red'
+                exp_date_list = {'20260507'};
+
+        end
+    case 'wheel_jitter'
+        x_label_str = 'wheel jitter';
+        switch subjectCode
+            case 'LSZ_practice_5_violet'
+                exp_date_list = {'20260417';'20260420';'20260422';'20260423';...
+                    '20260424';'20260428';'20260429';'20260430';'20260501'};
+            case 'GD_1_red'
+                exp_date_list = {'20260507'};
+
+        end    
+    case 'randomwalk'
+        x_label_str = 'randomwalk';
+        switch subjectCode
+            case 'LSZ_practice_5_violet'
+                exp_date_list = {'20260422';'20260423';...
+                    '20260424';'20260428';'20260429';'20260430';'20260501'};
+            case 'GD_1_red'
+                error('no random walk condition for this animal');
+        end
+
 end
+
+
 
 data_folder = fullfile('../../results/behav/pps_processed/',subjectCode);
 
@@ -26,10 +77,39 @@ for i = 1:numel(exp_date_list)
     exp_date = exp_date_list{i};
     load(fullfile(data_folder, sprintf('behav_data_PPS_%s_%s', subjectCode, exp_date)));
     % behav_data(1) = [];
+    switch parameter_option
+        case 'opacity'
+            condition_all_session = [behav_data(:).ball_opacity];
+        case 'y_vel'
+            condition_all_session = [behav_data(:).ball_y_speed];
+        case 'wheel_gain'
+            condition_all_session = [behav_data(:).wheel_gain];
+        case 'wheel_jitter'
+             wheel_jitter = [behav_data(:).wheel_jitter];
+             has_wheel_jitter = abs(wheel_jitter) > 0;
 
-    ball_opacity_all = [behav_data(:).ball_opacity];
-    ball_opacity_list = unique(ball_opacity_all);
-    n_condition = numel(ball_opacity_list);
+             condition_all_session = has_wheel_jitter;
+        case 'randomwalk'
+            random_std_all  = [behav_data(:).ball_random_std];
+            has_random_walk_all = abs(random_std_all) > 0;
+            % 0 or 1 indicate whether there is any random walk
+            % too complicated if we look at all combinations of random walk
+            % bias and random walk std
+            condition_all_session = has_random_walk_all; 
+
+    end
+    condition_list_session = unique(condition_all_session);
+    if strcmp(parameter_option ,'wheel_gain')
+        condition_list_session(~ismember(condition_list_session, [0.05, 0.1, 0.2])) = [];
+    end
+
+  % if strcmp(parameter_option ,'wheel_jitter')
+  %     condition_list_session(~ismember(condition_list_session,  [0, 0.1, 0.15, 0.25])) = [];
+  % 
+  %   end
+    
+    n_condition = numel(condition_list_session);
+
     [p_moved, p_rewarded_moved, p_moved_sem,p_rewarded_moved_sem] = deal(zeros(1, n_condition));
 
     [zscore_p_reward, zscore_target_moved, zscore_target_reward] =  deal(zeros(1, n_condition));
@@ -41,7 +121,7 @@ for i = 1:numel(exp_date_list)
             = deal(zeros(1, n_condition));
 
     for n = 1:n_condition
-        idx =  ball_opacity_all == ball_opacity_list(n);
+        idx =  condition_all_session == condition_list_session(n);
         
         % p_reward per condition
         doTimebin = false; doPlot = false; 
@@ -54,10 +134,10 @@ for i = 1:numel(exp_date_list)
        
         % target distance
         target_distance =  util_pps.compute_target_distance(behav_data(idx));
-        target_distance_rewarded(n) = target_distance.distance_median_rewarded;
-        target_distance_moved(n)    = target_distance.distance_median_moved;
-        target_distance_rewarded_mad(n) = target_distance.distance_MAD_rewarded;
-        target_distance_moved_mad(n)    = target_distance.distance_MAD_moved;
+        target_distance_rewarded(n) = mean(target_distance.distance_rewarded);
+        target_distance_moved(n)    = mean(target_distance.distanc_moved);
+        %target_distance_rewarded_mad(n) = target_distance.distance_MAD_rewarded;
+        %target_distance_moved_mad(n)    = target_distance.distance_MAD_moved;
 
 
         % correlation of trajectory per condition
@@ -69,7 +149,7 @@ for i = 1:numel(exp_date_list)
 
         
         % % z-score per condition
-        real_values.p_reward_real   = p_rewarded_moved(n);
+        real_values.p_reward_moved   = p_rewarded_moved(n);
         real_values.target_moved    = target_distance_moved(n);
         real_values.target_reward   = target_distance_rewarded(n);
         [zscore_p_reward(n), zscore_target_moved(n), zscore_target_reward(n)] =  util_pps.compute_z_score_condition(behav_data, real_values, idx, nPermute, EXP_CONFIG);
@@ -92,7 +172,7 @@ for i = 1:numel(exp_date_list)
     %     box off
     % end
     result_summary(i).exp_date                  = exp_date;
-    result_summary(i).ball_opacity_list         = ball_opacity_list;
+    result_summary(i).condition_list_session    = condition_list_session;
     result_summary(i).p_rewarded_moved          = p_rewarded_moved;
     result_summary(i).target_distance_rewarded  = target_distance_rewarded;
     result_summary(i).target_distance_moved     = target_distance_moved;
@@ -105,8 +185,8 @@ for i = 1:numel(exp_date_list)
 end
 %sgtitle(subjectCode,'fontweight','bold','fontsize',18,'interpreter','none')
 
-
-ball_opacity_all = [result_summary(:).ball_opacity_list];
+%% make figures
+condition_list_all = [result_summary(:).condition_list_session];
 
 p_rewarded_moved_all            = [result_summary(:).p_rewarded_moved];
 zscore_p_reward_all             = [result_summary(:).zscore_p_reward];
@@ -120,7 +200,7 @@ corr_trajectory_moved_all  = [result_summary(:).corr_trajectory_moved];
 corr_trajectory_rewarded_all  = [result_summary(:).corr_trajectory_rewarded];
 
 
-ball_opacity_list = unique(ball_opacity_all);
+condition_list = unique(condition_list_all);
 
 metrics = {
     'p_rewarded_moved',      'P(reward|moved)',        false;
@@ -133,21 +213,21 @@ metrics = {
     'corr_trajectory_rewarded', 'Trajectory correlation (rewarded)', false;
 
 };
-%%
+
 figure
 for m = 1:size(metrics,1)
     eval(sprintf('y_all  = %s_all;',metrics{m,1}))
     y_label_str  = metrics{m,2};
     do_sig = metrics{m,3};
 
-    y_avg = arrayfun(@(x) mean(y_all(ball_opacity_all == x), 'omitnan'), ball_opacity_list);
-    y_std = arrayfun(@(x) std(y_all(ball_opacity_all == x), 'omitnan'),  ball_opacity_list);
+    y_avg = arrayfun(@(x) mean(y_all(condition_list_all == x), 'omitnan'), condition_list);
+    y_std = arrayfun(@(x) std(y_all(condition_list_all == x), 'omitnan'),  condition_list);
 
     subplot(3,3,m); hold on
 
     % thin lines connecting points from the same session
     for i = 1:numel(result_summary)
-        x_sess = result_summary(i).ball_opacity_list;
+        x_sess = result_summary(i).condition_list_session;
         eval(sprintf('y_sess = result_summary(i).%s;',metrics{m,1}));
 
 
@@ -157,91 +237,28 @@ for m = 1:size(metrics,1)
     end
 
     % group average ± std
-    errorbar(ball_opacity_list, y_avg, y_std, ...
+    errorbar(condition_list, y_avg, y_std, ...
         'LineWidth', 2, ...
         'Color', 'black');
 
-    if do_sig
-        line([ball_opacity_list(1), ball_opacity_list(end)], ...
+    if strcmp(metrics{m,1}, 'zscore_p_reward')
+        line([condition_list(1), condition_list(end)], ...
              [1.645, 1.645], ...
              'LineStyle', '--', ...
              'Color', 'black');
     end
 
-    xlabel('Opacity');
+      if ismember(metrics{m,1}, {'zscore_target_moved','zscore_target_reward'})
+        line([condition_list(1), condition_list(end)], ...
+             -[1.645, 1.645], ...
+             'LineStyle', '--', ...
+             'Color', 'black');
+    end
+
+    xlabel(x_label_str);
     ylabel(y_label_str);
     box off
     set(gca, 'fontsize', 18)
 end
 
 sgtitle(subjectCode, 'fontweight', 'bold', 'fontsize', 18, 'interpreter', 'none')
-
-
-%%
-subjectCode  = 'LSZ_practice_5_violet'; 
-
-switch subjectCode
-    case 'LSZ_practice_5_violet'
-        exp_date_list = {'20260415'};
-        %exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};
-        init_x_list = [-12,12];
-    case 'GD_1_red'
-        exp_date_list = {'20260506'};
-        init_x_list = [-15,15];
-end
-
-%exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};
-data_folder = fullfile('../../results/behav/pps_processed/',subjectCode);
-
-behav_data_all = [];
-
-for  n = 1:numel(exp_date_list)
-    exp_date = exp_date_list{n};
-    load(fullfile(data_folder, sprintf('behav_data_PPS_%s_%s', subjectCode, exp_date)));
-    behav_data_all = [behav_data_all, behav_data];
-end
-plotOptions = struct();
-idx_rewarded = [behav_data_all(:).rewarded] == 1;
-idx_moved = [behav_data_all(:).is_moved] == 1;
-
-init_x_all  = round([behav_data_all(:).initial_x_rel_cm]);
-%
-% init_x_list =unique(init_x_all); 
-ball_opacity_all    = [behav_data_all(:).ball_opacity];
-ball_opacity_list   = unique(ball_opacity_all);
-nTrial              =  arrayfun(@(x)sum(ball_opacity_all == x), ball_opacity_list);
-ball_opacity_list(nTrial < 100) = [];
-
-
-
-
-figure; 
-% subplot(1,2,1)
-% for i = 1:numel(ball_opacity_list)
-%     for j  = 1:numel(init_x_list)
-%     is_plot             = ball_opacity_all == ball_opacity_list(i) & idx_moved & init_x_all == init_x_list(j);
-%     idx_plot            = find(is_plot);
-% 
-%     plotOptions.color = colors_list(i,:);
-%     h(i) = fig_pps.plot_ball_trajectories(behav_data_all, idx_plot, EXP_CONFIG, plotOptions);
-%     end
-%     legend_str_list{i} = sprintf('opacity = %.2f', ball_opacity_list(i));
-% end
-% legend(h, legend_str_list)
-% 
-% subplot(1,2,2)
-for i = 1:numel(ball_opacity_list)
-    for j  = 1:numel(init_x_list)
-    is_plot             = ball_opacity_all == ball_opacity_list(i) & idx_rewarded & init_x_all == init_x_list(j);
-    idx_plot            = find(is_plot);
-    if isempty(idx_plot)
-        continue
-    end
-    plotOptions.color = colors_list(i,:);
-    
-    h(i) = fig_pps.plot_ball_trajectories(behav_data_all, idx_plot, EXP_CONFIG, plotOptions);
-    end
-    legend_str_list{i} = sprintf('opacity = %.2f', ball_opacity_list(i));
-end
-legend(h, legend_str_list);
-title(subjectCode, 'Interpreter','none')

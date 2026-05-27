@@ -12,7 +12,7 @@ end
 global PPS_global
 generate_PPS_global();
 
-eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
+eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
 
 nSession = numel(session_list);
 nRow = floor(sqrt(nSession));

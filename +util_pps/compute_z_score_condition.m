@@ -1,18 +1,39 @@
-function z_score = compute_z_score_condition(behav_data, p_reward_real, idx, nPermute, EXP_CONFIG)
+function [zscore_p_reward, zscore_target_moved, zscore_target_reward] = compute_z_score_condition(behav_data, real_values, idx, nPermute, EXP_CONFIG)
 if  any(~ismember(idx,[0,1]))
     idx_run = idx;
 else
     idx_run = find(idx);
 end
-do_permute_sign = 0;
+
+%%%% real p_reward, target_moved, target_reward
+p_reward_real       = real_values.p_reward_moved;
+target_moved_real   = real_values.target_moved;
+target_reward_real  = real_values.target_reward;
+
+
 do_moved        = 1;
 
-p_reward_moved_permute = zeros(nPermute, 1);
+[p_reward_moved_permute, target_moved_permute, target_reward_permute] = deal(zeros(nPermute, 1));
 for t = 1:nPermute
     
-    [~, simu_stats]       = util_pps.simulate_trajectories_permute(behav_data,idx_run, EXP_CONFIG, do_permute_sign, do_moved);
-    p_reward_moved_permute(t)    = simu_stats.p_rewarded;
+    behav_data_simulated       = util_pps.simulate_trajectories_permute(behav_data,idx_run, EXP_CONFIG, do_moved);
+
+
+    doTimebin = false;
+    doPlot = false;
+    [percent_pps,~] = util_pps.get_probs_pps(behav_data_simulated, doTimebin, doPlot, EXP_CONFIG);
+
+
+    p_reward_moved_permute(t)    = percent_pps.p_reward_moved;
+
+    target_distance =  util_pps.compute_target_distance(behav_data_simulated);
+    target_moved_permute(t) = target_distance.distance_median_moved;
+    target_reward_permute(t) = target_distance.distance_median_rewarded;
+
 end
-z_score = (p_reward_real - mean(p_reward_moved_permute)) / std(p_reward_moved_permute);
+zscore_p_reward = (p_reward_real - mean(p_reward_moved_permute)) / std(p_reward_moved_permute);
+zscore_target_moved   = (target_moved_real - mean(target_moved_permute)) / std(target_moved_permute);
+zscore_target_reward    = (target_reward_real - mean(target_reward_permute)) / std(target_reward_permute);
+
 
 end

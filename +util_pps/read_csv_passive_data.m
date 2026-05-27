@@ -74,6 +74,7 @@ for k = 1:numel(csv_filename_list)
 
         behav_data(n).y_cm              = raw_data.slot1_y_cm(idx);
     end
+    N_exist = numel(behav_data);
 end
 prbs_rising_t = cat(1,prbs_rising_t{:});
 end

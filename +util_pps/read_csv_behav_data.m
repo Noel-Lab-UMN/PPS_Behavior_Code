@@ -118,14 +118,18 @@ for k = 1:numel(EXP_CONFIG)
 
         %behav_data(n).delta_hori_deg    = behav_data(n).delta_hori_cm  * (EXP_CONFIG(k).SPACE_DEGREES / EXP_CONFIG(k).SPACE_WIDTH_CM); 
         
-        %%%% extract random walk: delta_x - delta_cm_wheel
-        if behav_data(n).ball_random_bias == 0 & behav_data(n).ball_random_std == 0 
-            %%% In theory 
-            behav_data(n).x_random_walk  = zeros(size(behav_data(n).delta_hori_cm));
+        if isfield(behav_data, 'ball_random_bias')
+            %%%% extract random walk: delta_x - delta_cm_wheel
+            if behav_data(n).ball_random_bias == 0 & behav_data(n).ball_random_std == 0 
+                %%% In theory 
+                behav_data(n).x_random_walk  = zeros(size(behav_data(n).delta_hori_cm));
+            else
+    
+                behav_data(n).x_random_walk     = diff([behav_data(n).x_rel_cm]) - (behav_data(n).delta_hori_cm(2:end));
+                behav_data(n).x_random_walk     = [0; behav_data(n).x_random_walk]; % just to make array size consistent
+            end
         else
-
-            behav_data(n).x_random_walk     = diff([behav_data(n).x_rel_cm]) - (behav_data(n).delta_hori_cm(2:end));
-            behav_data(n).x_random_walk     = [0; behav_data(n).x_random_walk]; % just to make array size consistent
+            behav_data(n).x_random_walk  = zeros(size(behav_data(n).delta_hori_cm));
         end
 
         if isfield(EXP_CONFIG(k), 'CIRCLE_RADIUS_CM')
@@ -200,34 +204,49 @@ for k = 1:numel(EXP_CONFIG)
         %%%%%%% minimal effort to get ball into reward zone
        % behav_data(n).minimal_effort = min(abs(behav_data(n).initial_x_rel_cm - EXP_CONFIG(k).tolerant_space_cm));
         
+
+
+       %%%%% 05/21/26. Shizhao Liu. For wheel movement, use the no-jitter
+       %%%%% one
     
+        if isfield(behav_data, 'delta_cm_no_jitter')
+            wheel_movement = behav_data(n).delta_cm_no_jitter;
+        else
+            wheel_movement = behav_data(n).delta_hori_cm;
+        end
+
         %%%%%% How much the ball moved totally
-        behav_data(n).sum_delta_hori_cm         = sum(behav_data(n).delta_hori_cm);
-        behav_data(n).sum_abs_delta_hori_cm     = sum(abs(behav_data(n).delta_hori_cm));
-        %behav_data(n).sum_delta_hori_deg        = sum(behav_data(n).delta_hori_deg);
-        %behav_data(n).sum_abs_delta_hori_deg    = sum(abs(behav_data(n).delta_hori_deg));
-        %behav_data(n).is_moved                  =  behav_data(n).sum_abs_delta_hori_cm >= behav_data(n).minimal_effort;
+        behav_data(n).sum_wheel_movement_cm         = sum(wheel_movement);
+        behav_data(n).sum_abs_wheel_movement_cm     = sum(abs(wheel_movement));
+
 
         %%%%% By shizhao liu 04/22, use a threshold to determine if balls are
         %%%%% moved
-        behav_data(n).is_moved                  =  behav_data(n).sum_abs_delta_hori_cm >= EXP_CONFIG(k).MOVEMENT_THRESHOLD;
+        behav_data(n).is_moved                  =  behav_data(n).sum_abs_wheel_movement_cm >= EXP_CONFIG(k).MOVEMENT_THRESHOLD;
     
+        %%%% too much movement?  Two screens?
+        too_much_wheel_thres                    = 2 * EXP_CONFIG(1).SCREEN_WIDTH_CM;
+        behav_data(n).is_too_much_wheel         = [behav_data(n).sum_abs_wheel_movement_cm] > too_much_wheel_thres;
+
+  
+        %%%%%% at any given moement, the wheel movement (no jittering version) can be: GD, anti-GD and
+        %%%%%% zero. The sign is defined momentarily (based on the current
+        %%%%%% position of each frame)
         %%%% whether the movement is goal directed: i.e. toward the center
         %%%% if these two variables are opposite signs, it is goal-directed
         %%%% zero means static
-        behav_data(n).is_goal_directed_movement = -sign(behav_data(n).x_rel_cm) .* sign(behav_data(n).delta_hori_cm);
+     
+        is_goal_directed_movement = -sign(behav_data(n).x_rel_cm) .* sign(wheel_movement);
         idx_zero_x_rel = behav_data(n).x_rel_cm == 0;
         %%%% if the ball is at center then any movement is anti-goal-directed
-        behav_data(n).is_goal_directed_movement(idx_zero_x_rel & abs(behav_data(n).delta_hori_cm) > 0) = -1;
-    
-    
-        behav_data(n).sum_delta_goal_directed_cm    = sum(abs(behav_data(n).delta_hori_cm(behav_data(n).is_goal_directed_movement == 1)));
-        %behav_data(n).sum_delta_goal_directed_deg   = sum(abs(behav_data(n).delta_hori_deg(behav_data(n).is_goal_directed_movement == 1)));
-        behav_data(n).percent_goal_directed         = sum(behav_data(n).is_goal_directed_movement == 1) / numel(behav_data(n).is_goal_directed_movement);
-        behav_data(n).percent_anti_goal_directed    = sum(behav_data(n).is_goal_directed_movement == -1) / numel(behav_data(n).is_goal_directed_movement);
-        behav_data(n).percent_static                = sum(behav_data(n).is_goal_directed_movement == 0) / numel(behav_data(n).is_goal_directed_movement);
-    
-        
+        is_goal_directed_movement(idx_zero_x_rel & abs(wheel_movement) > 0) = -1;
+
+
+        behav_data(n).sum_abs_wheel_movement_directed_cm    = sum(abs(wheel_movement(is_goal_directed_movement == 1)));
+        %behav_data(n).sum_wheel_movement_all_cm              = sum(abs(wheel_movement));
+
+
+  
     
     end
     N_exist =  numel(behav_data); % how many balls already existed in the struct

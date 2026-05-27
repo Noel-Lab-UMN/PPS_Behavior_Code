@@ -14,6 +14,8 @@ exp_date_list = {'20260422';'20260423';'20260424';'20260428';'20260429';'2026043
 nSession = numel(exp_date_list);
 nRow            = floor(sqrt(nSession));
 nCol            = ceil(nSession / nRow); 
+[p_reward_moved_nowalk, p_rewarded_moved_nowalk_sem, z_score_nowalk] = deal(zeros(nSession, 1));
+[p_reward_moved_walk, p_rewarded_moved_walk_sem, z_score_walk] = deal(zeros(nSession, 1));
 for n = 1:nSession
     exp_date = exp_date_list{n};
     load(fullfile(data_folder, sprintf('behav_data_PPS_%s_%s', subjectCode, exp_date)));
@@ -32,41 +34,49 @@ for n = 1:nSession
     nStd  = numel(random_std_list);
 
     idx_no_random_walk = random_bias_all == 0;
-
-    p_reward_moved_nowalk = sum([behav_data(idx_no_random_walk).is_moved] & [behav_data(idx_no_random_walk).rewarded]) / sum([behav_data(idx_no_random_walk).is_moved]);
-    z_score_nowalk = util_pps.compute_z_score_condition(behav_data, p_reward_moved_nowalk, idx_no_random_walk, nPermute, EXP_CONFIG);
-
-    [p_reward_moved, p_reward_free, z_score, random_walk_percent] = deal(zeros(1, nStd));
     
-    for i = 1:nBias
-        for j = 1:nStd
-            idx = find(random_bias_abs_all == random_bias_list(i) & ...
-                random_std_all == random_std_list(j));
+   
+   
+    p_reward_moved_nowalk(n) = sum([behav_data(idx_no_random_walk).is_moved] & [behav_data(idx_no_random_walk).rewarded]) / sum([behav_data(idx_no_random_walk).is_moved]);
+    p_rewarded_moved_nowalk_sem(n) = sqrt(p_reward_moved_nowalk(n) * (1 - p_reward_moved_nowalk(n)) / ...
+                sum([behav_data(idx_no_random_walk).is_moved]));
+    z_score_nowalk(n) = util_pps.compute_z_score_condition(behav_data, p_reward_moved_nowalk(n), idx_no_random_walk, nPermute, EXP_CONFIG);
+    
+    
+    idx_random_walk = ~idx_no_random_walk;
+    p_reward_moved_walk(n) = sum([behav_data(idx_random_walk).is_moved] & [behav_data(idx_random_walk).rewarded]) / sum([behav_data(idx_random_walk).is_moved]);
+    p_rewarded_moved_walk_sem(n) = sqrt(p_reward_moved_walk(n) * (1 - p_reward_moved_walk(n)) / ...
+                sum([behav_data(idx_random_walk).is_moved]));
+    z_score_walk(n) = util_pps.compute_z_score_condition(behav_data, p_reward_moved_walk(n), idx_random_walk, nPermute, EXP_CONFIG);
+    
+end
+%%
+figure
+subplot(2,1,1)
+errorbar([1:nSession], p_reward_moved_nowalk, p_rewarded_moved_nowalk_sem, 'LineWidth',2); hold on
+errorbar([1:nSession], p_reward_moved_walk, p_rewarded_moved_walk_sem, 'LineWidth',2);
+box off
+xlabel('Session index');
+ylabel('P(reward|moved)');
+legend('No random walk','Random walk')
+set(gca,'fontsize', 18)
+subplot(2,1,2)
+plot([1:nSession], z_score_nowalk, '-o', 'LineWidth',2); hold on
+plot([1:nSession],z_score_walk, '-o', 'LineWidth',2 );
+line([1, nSession], [1.645, 1.645], 'linestyle','--','color','black');
 
-            %%% p_reward_moved
-            p_reward_moved(i,j) = sum([behav_data(idx).is_moved] & [behav_data(idx).rewarded]) / sum([behav_data(idx).is_moved]);
-            %%% z-score
-           % z_score(i) = util_pps.compute_z_score_condition(behav_data, p_reward_moved(i), idx, nPermute, EXP_CONFIG);
-            %%% p_reward_free
-            p_reward_free(i,j) = sum(~[behav_data(idx).is_moved] & [behav_data(idx).rewarded]) / sum(~[behav_data(idx).is_moved]);
-
-            rwp = zeros(numel(idx),1);
-            for t = 1:numel(idx)
-                idx_move = behav_data(idx(t)).delta_hori_cm ~= 0;
-                
-                rwp(t) = mean( abs(behav_data(idx(t)).x_random_walk(idx_move)) ./ abs(behav_data(idx(t)).delta_hori_cm(idx_move)), 'omitnan');
-            end
-            random_walk_percent(i,j) = median(rwp,'omitnan');
-        end
-    end
-    %%%
-    subplot(nRow, nCol, n)
-     for i = 1:nBias
-       % plot(random_std_list, z_score,'-o'); hold on
-        plot(random_std_list, random_walk_percent(i,:),'-o'); hold on
-     end
+box off
+xlabel('Session index');
+ylabel('Zscore')
+legend('No random walk','Random walk')
+set(gca,'fontsize', 18)
+% subplot(nRow, nCol, n)
+%  for i = 1:nBias
+%     plot(random_std_list, z_score(i,:),'-o'); hold on
+%    % plot(random_std_list, random_walk_percent(i,:),'-o'); hold on
+%  end
      %legend(random_bias_list)
     % line([random_std_list(1) - 5, random_std_list(end)+5],[1.65, 1.65],'linestyle','--','color','black');
     % line([random_std_list(1) - 5, random_std_list(end)+5],[z_score_nowalk, z_score_nowalk],'linestyle','-','color','blue');
-end
+
 %% Percentage of random walk

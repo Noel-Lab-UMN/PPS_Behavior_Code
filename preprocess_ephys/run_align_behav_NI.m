@@ -2,9 +2,9 @@ clear all
 clc
 close all
 %%
-data_folder = '/Users/liushizhao/projects_local/PPS/data_ephys/LSZ_practice_5_violet_05_01_26_g0';
-subjectCode = 'LSZ_practice_5_violet';
-dateStr = '20260501';
+data_folder = '/Users/liushizhao/projects_local/PPS/test_ephys_workflow/LSZ_practice_5_Violet';
+subjectCode = 'LSZ_practice_5_Violet';
+dateStr = '20260430';
 dateStr_e = sprintf('%s_%s_%s',dateStr(5:6),dateStr(7:8), dateStr(1:4));
 
 meta_folder = fullfile(data_folder, sprintf('%s_%s_behav',subjectCode, dateStr));
@@ -28,10 +28,9 @@ else
     load(passive_data_save_name)
 end
 %%
-% file_meta       = fullfile(data_folder, sprintf('%s_%s_g0_t0.nidq.meta', subjectCode, dateStr_e));
-% file_bin        = fullfile(data_folder, sprintf('%s_%s_g0_t0.nidq.bin', subjectCode, dateStr_e));
-file_meta       = fullfile(data_folder, 'LSZ_practice_5_violet_05_01_26_g0_t0.nidq.meta');
-file_bin        = fullfile(data_folder, 'LSZ_practice_5_violet_05_01_26_g0_t0.nidq.bin');
+file_meta       = fullfile(data_folder, sprintf('%s_%s_g0_t0.nidq.meta', subjectCode, dateStr_e));
+file_bin        = fullfile(data_folder, sprintf('%s_%s_g0_t0.nidq.bin', subjectCode, dateStr_e));
+
 
 NI_timing       = util_pps.read_binary_sync(file_meta, file_bin);
 %% get the slope and intercept
@@ -55,7 +54,7 @@ if nPrbs_behav + nPrbs_passive == nPrbs_NI
 else
     flag_prbs_equal = false;
 end
-%%
+
 %%%% Align to timing in .csv files
 %%%% CSV_timing = p(1) * NI_timing + p(2)
 %%%% So, NI_timing should be x and CSV_timing should be y
@@ -90,8 +89,8 @@ end
   
 
 %% use the fit to align spike times
-probe_folder = fullfile(data_folder, 'LSZ_practice_5_violet_05_01_26_g0_imec0');
-individual_cluster_folder = fullfile(probe_folder, 'LSZ_practice_5_violet_05_01_26_g0_imec0_ksdata_individual_cluster');
+
+individual_cluster_folder = fullfile(data_folder, 'ksdata_individual_cluster');
 
 cluster_list = dir(fullfile(individual_cluster_folder, '*.mat'));
 nCluster = numel(cluster_list);
@@ -118,7 +117,6 @@ for i_cluster = 1:nCluster
     neuron.n.spike_times_behav = spike_times_behav;
     neuron.n.spike_times_passive = spike_times_passive;
 
-    neuron.aligned = true;
     save(cluster_file_name, 'neuron');
 end
 

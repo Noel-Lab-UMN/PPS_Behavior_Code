@@ -1,18 +1,19 @@
-function ks_data = run_load_kilosort_data(data_folder)
+function ks_data = run_load_kilosort_data(data_folder_full, data_folder_name)
     %%
    %  data_folder = 'PPS0088_test7_g0/PPS0088_test7_g0_imec0';
-    ephysKilosortPath = fullfile(data_folder, 'kilosort4');
+    ephysKilosortPath = fullfile(data_folder_full, 'kilosort4');
     
     %ephysRawFile = 'PPS0088_test7_g0/PPS0088_test7_g0_imec0/PPS0088_test7_g0_t0.imec0.ap.cbin';
-    ephysMetaDir = dir(fullfile(data_folder,'*.ap.meta'));
+    ephysMetaDir = dir(fullfile(data_folder_full,'*.ap.meta'));
 
 
-    ephysRawFile_list = dir(fullfile(data_folder, '*.ap.cbin'));
-    ephysRawFile = fullfile(data_folder, ephysRawFile_list(1).name);
+    ephysRawFile_list = dir(fullfile(data_folder_full, '*.ap.cbin'));
+    ephysRawFile = fullfile(data_folder_full, ephysRawFile_list(1).name);
 
-    kilo_save_name = fullfile(data_folder,'%s_kilosorted.mat',data_folder);
-    individual_ks_data_folder  = fullfile(data_folder, 'ksdata_individual_cluster');
-    finish_flag_name = fullfile(individual_ks_data_folder,'organized_flag.txt');
+    kilo_save_name = fullfile(data_folder_full,sprintf('%s_kilosorted_data.mat',data_folder_name));
+    individual_ks_data_folder  = fullfile(data_folder_full, sprintf('%s_ksdata_individual_cluster', data_folder_name));
+    %finish_flag_name = fullfile(individual_ks_data_folder,'organized_flag.txt');
+    individual_ks_data_zip_name = [individual_ks_data_folder,'.zip'];
     %% Parameters
     prs.fs = 30000;
     prs.min_fr = 0.5;
@@ -27,13 +28,17 @@ function ks_data = run_load_kilosort_data(data_folder)
     prs.syncChanIndex = 385;
     prs.dtype = 'int16';                               % Always int16 for SpikeGLX
     prs.bytes_per_sample = 2;                          % int16 = 2 bytes
+    if isfile(individual_ks_data_zip_name)
+       fprintf('Loading and re-organizing already finished for %s,skipping \n',data_folder_name);
+       return
+    end
     %% Importing neurons
     disp("LOADING SPIKES DATA NOW.....")
     sp  = loadKSdir(ephysKilosortPath);
     %% Run BOMBCELL
     % quality control... BOMBCELL
-    savePath = [data_folder filesep 'bombcell']; % where you want to save the quality metrics
-    disp("RUNNING BOMBCELL NOW.....")
+    savePath = [data_folder_full filesep 'bombcell']; % where you want to save the quality metrics
+    
     [qMetric, unitType] = run_bombcell(ephysKilosortPath, ephysRawFile, ephysMetaDir, savePath);
     
     %  % unitType:
@@ -65,7 +70,7 @@ function ks_data = run_load_kilosort_data(data_folder)
 
 
     %% save individual clusters
-    if ~isfile(finish_flag_name)
+    if ~isfile(individual_ks_data_zip_name)
         load(kilo_save_name);
         
         if ~isfile(individual_ks_data_folder)
@@ -116,11 +121,12 @@ function ks_data = run_load_kilosort_data(data_folder)
         
             % save neuron
             % NEED TO ADD BRAIN AREA TO THIS...
-            save_name = fullfile(individual_ks_data_folder, sprintf('%s_cluster_%d', data_folder, i_cluster));
+            save_name = fullfile(individual_ks_data_folder, sprintf('%s_cluster_%d', data_folder_name, i_cluster));
             save(save_name, 'neuron', '-v7.3');
         end
     end
     %%%% save a finish flag
-    save('Finished loading and organizing kilosort data.',finish_flag_name);
+    %save('Finished loading and organizing kilosort data.',finish_flag_name);
+    zip(individual_ks_data_zip_name, individual_ks_data_folder);
 
 end

@@ -141,19 +141,19 @@ for i = 1:numel(subjectCode_list)
 
 end
 %%
-color_list = {'red';'blue';'magenta';'cyan';'black'};
-figure; hold on
-for i = 1:numel(subjectCode_list)
-    idx = strcmp({results_summary(:).subjectCode}, subjectCode_list{i});
-    plot_data = [results_summary(idx).end_abs_x_small];
-    plot([1:numel(plot_data)], plot_data,'-o','Color',color_list{i}, 'LineWidth', 2, 'MarkerSize',8);
-
-    plot_data = [results_summary(idx).end_abs_x_big];
-    plot([1:numel(plot_data)], plot_data,'--o','Color',color_list{i}, 'LineWidth', 2, 'MarkerSize',8);
-
-end
-set(gca, 'fontsize', 18);
-ylabel('End distance'); xlabel('Session index')
+% color_list = {'red';'blue';'magenta';'cyan';'black'};
+% figure; hold on
+% for i = 1:numel(subjectCode_list)
+%     idx = strcmp({results_summary(:).subjectCode}, subjectCode_list{i});
+%     plot_data = [results_summary(idx).end_abs_x_small];
+%     plot([1:numel(plot_data)], plot_data,'-o','Color',color_list{i}, 'LineWidth', 2, 'MarkerSize',8);
+% 
+%     plot_data = [results_summary(idx).end_abs_x_big];
+%     plot([1:numel(plot_data)], plot_data,'--o','Color',color_list{i}, 'LineWidth', 2, 'MarkerSize',8);
+% 
+% end
+% set(gca, 'fontsize', 18);
+% ylabel('End distance'); xlabel('Session index')
 
 %% animals with wheel training more active?
 %% plot trajectory for each animal
