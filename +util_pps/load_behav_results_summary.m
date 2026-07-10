@@ -9,6 +9,7 @@ for n = 1:numel(session_list)
 
     behav_results_summary(n).p_moved =  behav_results.percent_pps.p_moved;
     %%%% percentage of rewarded
+    behav_results_summary(n).nRewarded  = sum([behav_data(:).rewarded]);
     behav_results_summary(n).p_reward_real              = behav_results.percent_pps.p_reward;
     behav_results_summary(n).p_reward_moved             = behav_results.percent_pps.p_reward_moved; 
     %behav_results_summary(n).p_reward_initialOUT_left   = behav_results.percent_pps.p_reward_initialOUT_left;

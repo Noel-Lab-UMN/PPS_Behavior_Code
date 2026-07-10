@@ -13,7 +13,12 @@ subjectCode_list = {'GD_1_red';'GD_2_blue';'GD_3_pink';'GD_4_mint';'GD_5_grey'};
 for i = 1:numel(subjectCode_list)
 
     subjectCode = subjectCode_list{i};
-    eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+    % if strcmp(subjectCode, 'GD_1_red')
+    %     eval(sprintf('session_list = PPS_global.%s.session_list.initial_all;',subjectCode));
+    % else
+    %     eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+    % end
+    eval(sprintf('session_list = PPS_global.%s.session_list.all;',subjectCode));
     for j =  1 : numel(session_list)
         data_folder =  fullfile('../../results/behav/pps_processed',subjectCode);
 

@@ -9,7 +9,7 @@ generate_PPS_global();
 subjectCode = 'LSZ_practice_5_violet';
 %plotIndividual = false;
 
-parameter_option = 'wheel_jitter';
+parameter_option = 'randomwalk';
 
 switch parameter_option
     case 'opacity'
@@ -80,15 +80,19 @@ for i = 1:numel(exp_date_list)
     switch parameter_option
         case 'opacity'
             condition_all_session = [behav_data(:).ball_opacity];
+            trained_condition = 1;
         case 'y_vel'
             condition_all_session = [behav_data(:).ball_y_speed];
+            trained_condition = 40;
         case 'wheel_gain'
             condition_all_session = [behav_data(:).wheel_gain];
+            trained_condition = 0.1;
         case 'wheel_jitter'
              wheel_jitter = [behav_data(:).wheel_jitter];
              has_wheel_jitter = abs(wheel_jitter) > 0;
 
              condition_all_session = has_wheel_jitter;
+             trained_condition = 0;
         case 'randomwalk'
             random_std_all  = [behav_data(:).ball_random_std];
             has_random_walk_all = abs(random_std_all) > 0;
@@ -96,13 +100,14 @@ for i = 1:numel(exp_date_list)
             % too complicated if we look at all combinations of random walk
             % bias and random walk std
             condition_all_session = has_random_walk_all; 
-
+            trained_condition = 0;
     end
     condition_list_session = unique(condition_all_session);
     if strcmp(parameter_option ,'wheel_gain')
         condition_list_session(~ismember(condition_list_session, [0.05, 0.1, 0.2])) = [];
     end
-
+    is_trained = zeros(size(condition_list_session));
+    is_trained(condition_list_session == trained_condition) = 1;
   % if strcmp(parameter_option ,'wheel_jitter')
   %     condition_list_session(~ismember(condition_list_session,  [0, 0.1, 0.15, 0.25])) = [];
   % 
@@ -135,7 +140,7 @@ for i = 1:numel(exp_date_list)
         % target distance
         target_distance =  util_pps.compute_target_distance(behav_data(idx));
         target_distance_rewarded(n) = mean(target_distance.distance_rewarded);
-        target_distance_moved(n)    = mean(target_distance.distanc_moved);
+        target_distance_moved(n)    = mean(target_distance.distance_moved);
         %target_distance_rewarded_mad(n) = target_distance.distance_MAD_rewarded;
         %target_distance_moved_mad(n)    = target_distance.distance_MAD_moved;
 
@@ -173,6 +178,7 @@ for i = 1:numel(exp_date_list)
     % end
     result_summary(i).exp_date                  = exp_date;
     result_summary(i).condition_list_session    = condition_list_session;
+    result_summary(i).is_trained                = is_trained; 
     result_summary(i).p_rewarded_moved          = p_rewarded_moved;
     result_summary(i).target_distance_rewarded  = target_distance_rewarded;
     result_summary(i).target_distance_moved     = target_distance_moved;
@@ -184,6 +190,12 @@ for i = 1:numel(exp_date_list)
 
 end
 %sgtitle(subjectCode,'fontweight','bold','fontsize',18,'interpreter','none')
+untrained_above_chance = ...
+    arrayfun(@(n)any(result_summary(n).zscore_p_reward(~boolean(result_summary(n).is_trained)) > 1.625), [1:numel(exp_date_list)]);
+trained_above_chance = ...
+    arrayfun(@(n)any(result_summary(n).zscore_p_reward(boolean(result_summary(n).is_trained)) > 1.625), [1:numel(exp_date_list)]);
+fprintf('%s: %d/%d sessions have untrained condition above chance \n', parameter_option, sum(untrained_above_chance), numel(exp_date_list));
+fprintf('%s: %d/%d above-chance sessions have untrained condition above chance \n', parameter_option, sum(untrained_above_chance), sum(trained_above_chance));
 
 %% make figures
 condition_list_all = [result_summary(:).condition_list_session];

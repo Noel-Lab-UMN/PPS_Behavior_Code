@@ -28,10 +28,10 @@ switch plotOptions.style
         nTrial = numel(idx_plot);
 
 
-        x_cm_mean   = mean(Xy(idx_plot,:),1,'omitnan');
+        x_cm_mean   = mean(Xy(idx_plot,:),1);
      
 
-        x_cm_sem    = std(Xy(idx_plot,:), [], 1,'omitnan') / sqrt(nTrial);
+        x_cm_sem    = std(Xy(idx_plot,:), [], 1) / sqrt(nTrial);
         
         
         valid = ~isnan(x_cm_mean) & ~isnan(x_cm_sem) & ~isnan(yCommon);

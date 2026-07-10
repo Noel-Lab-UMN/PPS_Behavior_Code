@@ -23,7 +23,7 @@ if doThis
     
     
         idx = find([behav_data(:).reached_bottom] & [behav_data(:).is_moved]);
-        [r_all, r_single_moved(i_session)] = compute_trajectory_correlation(behav_data, idx, doPlot);
+        [r_all, r_single_moved(i_session)] = util_pps.compute_trajectory_correlation(behav_data, idx, doPlot);
         
         r_avg_moved(i_session) = mean(r_all);
         r_sem_moved(i_session) = std(r_all) / sqrt(numel(r_all));
@@ -31,7 +31,7 @@ if doThis
         
         idx = find([behav_data(:).rewarded]);
     
-        [r_all, r_single_rewarded(i_session)] = compute_trajectory_correlation(behav_data, idx, doPlot);
+        [r_all, r_single_rewarded(i_session)] = util_pps.compute_trajectory_correlation(behav_data, idx, doPlot);
         
         r_avg_rewarded(i_session) = mean(r_all);
         r_sem_rewarded(i_session) = std(r_all) / sqrt(numel(r_all));
@@ -61,12 +61,12 @@ if doThis
     save_folder = fullfile('../../results/behav/pps_processed/', subjectCode);
 
     doPlot = true;
-    exp_date    = '20260310';
+    exp_date    = '20260408';
     load(fullfile(save_folder, sprintf('behav_data_PPS_%s_%s',subjectCode,exp_date)));
 
 
     idx = find([behav_data(:).reached_bottom] & [behav_data(:).is_moved]);
-    [r_all, r_single_moved] = compute_trajectory_correlation(behav_data, idx, doPlot);
+    [r_all, r_single_moved] = util_pps.compute_trajectory_correlation(behav_data, idx, doPlot);
 end
 sgtitle(sprintf('%s, %s',subjectCode,  exp_date),'interpreter','none','fontsize',18,'fontweight','bold')
 %%

@@ -40,7 +40,9 @@ try:
 except Exception:
     serial = None
 
-##
+# ==============================================
+# Basic info of the experiment
+# ==============================================
 exp_name            = 'move_wheel_habituation' 
 home_path           = "Z:/17. Goal-directed-PPS"
 EXP_CONFIG_PATH     = os.path.join(home_path, f"3-config-json/exp_default/config_default_database_{exp_name}.json")
@@ -51,7 +53,7 @@ paths_conf          = default_exp_config["paths"]
 
 
 # =============================================================================
-# 2. INIT DB + STORAGE MANAGERS
+#  INIT DB + STORAGE MANAGERS
 # =============================================================================
 
 client = RigDBClient(
@@ -75,10 +77,8 @@ mgr = SessionManager(
 
 
 
-
-
 # =============================================================================
-# 4. LOAD MOUSE AND RIG OPTIONS
+#  LOAD MOUSE AND RIG OPTIONS
 # =============================================================================
 rig_options = mgr.load_rig_options()
 print("\nAvailable rigs:")
@@ -93,7 +93,7 @@ except Exception:
     sys.exit(1)
 
 rig_name = selected_option
-rig_id   = selected_index
+rig_id   = selected_index 
 
 
 mouse_options, option_to_mouse_id = mgr.load_mice_options(
@@ -128,7 +128,7 @@ hardware_config     = load_json(RIG_CONFIG_PATH)
 config_all          = deep_update(hardware_config, default_exp_config)
 
 
-ANIMAL_CONFIG_PATH = os.path.join(home_path, f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_move_wheel_habituation.json")
+ANIMAL_CONFIG_PATH = os.path.join(home_path, f"3-config-json/subject_exp/{mouse_name}/config_{mouse_name}_{exp_name}.json")
 if os.path.exists(ANIMAL_CONFIG_PATH):
     animal_config = load_json(ANIMAL_CONFIG_PATH)
     config_all = deep_update(config_all, animal_config)
@@ -182,11 +182,10 @@ WHEEL_GAIN_CM_PER_TICK      = exp_conf["WHEEL_GAIN_CM_PER_TICK"]
 WARMUP_S                    = exp_conf["WARMUP_S"]
 REWARD_TARGET               = reward_conf["REWARD_TARGET"] 
 
-# ===================================================
-# Reward set up 
-# ===================================================
 
-
+# ===============================================
+# Save paths
+# ===============================================
 
 # session folder uses date only (YYYYMMDD)
 meta_root = os.path.join(home_path, "1-data/metadata")
@@ -213,8 +212,11 @@ config_to_save = {
     "config": config_all
 }
 
-
 session_parameters = config_to_save
+
+# ===================================================
+# Reward set up 
+# ===================================================
 
 
 if reward_conf.get("use_rig_calibration", True):
@@ -246,12 +248,6 @@ if reward_conf.get("use_rig_calibration", True):
 
 reward_duration_dict   = dict(zip(REWARD_AMOUNT_LIST, REWARD_DURATION_MS_LIST))
 config_to_save["config"]["reward"]["REWARD_DURATION_MS_LIST"] = REWARD_DURATION_MS_LIST
-
-
-
-
-
-
 
 
 
@@ -450,7 +446,9 @@ reward_active_until = 0.0
 reward_state_pulse_pending = False
 
 try:
-
+    # ===========================
+    # Database begin session
+    # ===========================
     ctx = mgr.begin_session(
         mouse_name=mouse_name,
         mouse_id=mouse_id,
@@ -622,6 +620,7 @@ finally:
     
     performance_results = analyze_move_wheel(session_dir, prefix="sync_log_wheelmove")
     new_params          = update_config_move_wheel(EXP_CONFIG_FILENAME, performance_results)
+    ###### upload the results and updated parameters to the database
     if ctx is not None:
         # mgr.finalize_unanalyzed_session(
         #     ctx,

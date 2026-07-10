@@ -236,9 +236,115 @@ def deg_to_screen_cm(deg, space_cm):
     d_cm = d / space_cm * space_cm
     return d_cm
 
-def calculate_PPS_percentages(spawn_groups):
+def analyze_pps_newHabituation(folder_path, prefix):
+    ### total number of rewarded
+    ### reward rate
+
+    ####### Load discontinuous trials
+    pattern = os.path.join(folder_path, f"discontinuous_{prefix}*.csv")
+    csv_files = sorted(glob.glob(pattern))
+    
+    if len(csv_files) == 0:
+        raise FileNotFoundError(f"No CSV files found matching: {pattern}")
+    
+    total_rewards_count = 0
+    total_time_sec = 0.0
+    for csv_path in csv_files:
+        df = pd.read_csv(csv_path)
+
+        if df.empty:
+            continue
+        # Identify reward events
+        reward_rows = df[df["reward_amount"] > 0]
+        total_rewards_count += len(reward_rows)
+
+    ###### Load continuous trials
+    pattern = os.path.join(folder_path, f"sync_log_{prefix}*.csv")
+    csv_files = sorted(glob.glob(pattern))
+    
+    if len(csv_files) == 0:
+        raise FileNotFoundError(f"No CSV files found matching: {pattern}")
+    
+   
+    total_time_sec = 0.0
+    for csv_path in csv_files:
+        df = pd.read_csv(csv_path)
+
+        if df.empty:
+            continue
+        
+        # Duration of this file
+        t = df["t_global_s"].dropna()
+        if len(t) >= 2:
+            total_time_sec += t.iloc[-1] - t.iloc[0]
+
+    minute_total = total_time_sec / 60 if total_time_sec > 0 else np.nan
+    reward_rate_count =  total_rewards_count / minute_total
+    performance_results = {
+        "reward_rate_count": reward_rate_count
+    }
+    
+    return  performance_results
 
 
 
 
-def calculate_PPS_z_scores(spawn_groups):
+def update_params_pps_newHabituation(previous_config_path, performance_results):
+    ##### if more than 100 trials per hour, then make it more difficult
+    #### by (1) decreasing the radius by 0.25 cm (2) increase the y distance by 6 cm
+    ###### (3) decreasing the time tolerance by 0.1 s
+    ##### Minimum radius; 2.5 cm, maximum distance: 42 cm,  minimum trial length: 1.2 s
+    prev_config             = load_json(previous_config_path)
+    previous_radius         = prev_config["config"]["ball"]["CIRCLE_RADIUS_CM"]
+    previous_y_distance     = prev_config["config"]["experiment"]["Y_DISTANCE_FROM_EDGE"] 
+    previous_t_tol          = prev_config["config"]["experiment"]["TRIAL_TIME_TOLERANCE"]
+
+    REWARD_RATE_THRESHOLD   = 100.0 / 60.0 
+    RADIUS_MINIMUM          = 2.5 # in centimeter
+    Y_DISTANCE_MAXIUM       = 42  # in centimeter
+    T_TOL_MINIMUM           = 1.2 # in seconds 
+
+
+    if performance_results["reward_rate_count"] >  REWARD_RATE_THRESHOLD:
+        new_radius      = max(previous_radius - 0.25, RADIUS_MINIMUM)
+        new_y_distance  = min(previous_y_distance + 6.0, Y_DISTANCE_MAXIUM)
+        new_t_tol       = max(previous_t_tol - 0.1, T_TOL_MINIMUM)
+    
+        if new_y_distance >= 15:
+            #### We have this bottom tolerance because when the ball starts very close, 
+            #### the animal might be able to move it close to their body before the ball really touches the bottom. 
+            #### I don't want to confuse them or have them wait too long, at least in early sessions.
+            #### But as the balls start further away, whether having this tolerance wouldn't make a big difference,
+            #### and we should remove this tolerance.
+
+            new_bottom_tol = 0.0
+        else:
+            new_bottom_tol = 0.1
+    else:
+        new_radius      = previous_radius
+        new_y_distance  = previous_y_distance
+        new_t_tol       = previous_t_tol
+        new_bottom_tol  = 0.1
+
+    
+    ######## Create the parameter to be returned
+    new_params                  = {}
+    new_params["ball"]          = {}
+    new_params["experiment"]    = {}
+    new_params["ball"]["CIRCLE_RADIUS_CM"]              = new_radius
+    new_params["experiment"]["Y_DISTANCE_FROM_EDGE"]    = new_y_distance
+    new_params["experiment"]["TRIAL_TIME_TOLERANCE"]    = new_t_tol
+    new_params["experiment"]["BOTTOM_TOLERANCE"]        = new_bottom_tol
+
+    return new_params
+
+
+
+
+    
+
+
+
+    
+
+

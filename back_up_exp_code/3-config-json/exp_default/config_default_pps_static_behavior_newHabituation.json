@@ -1,0 +1,90 @@
+{
+   "database": {
+    "_comment": "Database/server connection settings. Usually only experiment_id changes between experiments.",
+    "base_url": "http://10.33.132.131:8002",
+    "experiment_id": 6,
+    "require_analyzed_last_session": true,
+    "timeout_s": 20.0
+  },
+
+   "paths":{
+    "mouse_record_csv":"Z:\\17. Goal-directed-PPS\\4-documentation\\MouseRecord.csv",
+    "raw_data_dir":  "Z:\\17. Goal-directed-PPS\\1-data\\1-raw",
+    "smb_base_unc": "\\\\noel-nas-001.neuroscience.umn.edu\\Projects\\17. Goal-directed-PPS\\1-data\\1-raw"
+  },
+
+  "experiment":{
+      "WHEEL_GAIN_CM_PER_TICK": 0.1, 
+      "TRIAL_TIME_TOLERANCE": 2.0,
+      "Y_DISTANCE_FROM_EDGE": 6.1, 
+      "BOTTOM_TOLERANCE": 0.1,
+      "WARMUP_S":10.0,
+      "RUNTIME_TIMEOUT_MINUTES": 60.0,
+      "LOG_FLUSH_INTERVAL_FRAMES": 600,
+      "SPACE_DEGREES" : 360.0
+
+     },   
+
+
+   "spawn":{
+    "_comment": "Control the spawning behavior",
+    "SPAWN_DISTRIBUTION": "choice",  
+    "SPAWN_GAUSS_CENTER_LIST": [-16.0, -15.0, -14.0, -13.0, -12.0, -11.0, -10.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0],
+    "SPAWN_GAUSS_SIGMA_CM":  0,     
+    "SPAWN_UNIFORM_RANGE": [10.0, 15.0], 
+    "SPAWN_GAUSS_RESAMPLE_MAX":  50,    
+    "SPAWN_GAUSS_CLAMP_TO_SCREEN": true,
+   
+    "SPAWN_ONLY_STATIONARY": true, 
+    "STATIONARY_INTERVAL":  500.0, 
+    "STATIONARY_TOLERANCE": 4,
+    "SPAWN_INTERVAL_RANGE": [2.0, 2.5],                
+    "BALL_FLICKER_DURATION": null,      
+    "BALL_FLICKER_INTERVAL": null,      
+    "MULTIPLE_BALLS": false,
+    "MULTIPLE_BALLS_SPAWN_INTERVAL":[0.5, 1.0],
+    "DEFAULT_LOG_MAX_BALLS": 10,
+    "MAX_NUM_BALLS": 10
+  },
+
+
+   "ball":{
+    "CIRCLE_RADIUS_CM": 6.0, 
+    "BALL_OPACITY": 1.0
+  },
+
+  "obstruction":{
+    "_comment": "Control the obstruction",
+    "SCREEN_EDGE_OBSTRUCTION": true
+  },
+  
+  "region_1": {
+    "_comment":"Control the property of region1",
+    "DEG_RANGE":[0, 360],
+    "GAIN": 1,
+    "COLOR": "black",
+    "PROB_SPAWN": 1,
+    "SPAWN_FUNCTION": null,
+    "LINEAR_VELOCITY": null,
+    "PATCH_SHAPE": "square",
+    "PATCH_FRACTION": 0.15,
+    "PATCH_SIZE_CM": 4.0,
+    "TEMPORAL_VISIBILITY": 100.0,
+    "TEMPORAL_STIMULUS_VISIBLE":false,
+    "SPATIAL_VISIBILITY":false,
+    "SPATIAL_STIMULUS_VISIBLE":false},
+
+    "reward":{
+        "REWARD_CONSECUTIVE": true, 
+        "CONSECUTIVE_TOL": 2,
+        "N_REWARD_MIN": 1,
+        "N_REWARD_MAX": 4, 
+        "REWARD_TARGET": 2.5,
+        "REWARD_DELAY": 100,
+        "FREE_REWARD": true,
+        "NREP_FREE": 2,
+        "FREE_SEGMENT": 30
+
+    }
+
+}

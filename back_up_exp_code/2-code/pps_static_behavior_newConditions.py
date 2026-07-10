@@ -1,4 +1,4 @@
-"""
+ """
 Static-obstruction behavior experiment. The prbs thread and logging has been removed.
 
 Notes:
@@ -20,9 +20,11 @@ import os
 import traceback
 from time import perf_counter
 from datetime import datetime
-
+import sys
 from dataclasses import dataclass, asdict
 import json
+
+import math
 
 import numpy as np
 from psychopy import visual, core, event, monitors
@@ -51,10 +53,24 @@ mouse_name  = input("Enter mouse name (short, no spaces): ").strip()
 if not mouse_name:
     mouse_name = "mouseUNK"
 
-RIG_NAME    = input("Enter rig name: ").strip()
-RIG_NAME_LIST = ['PPS_training_Rig_3', 'PPS_training_Rig_2', 'PPS_training_Rig_1', 'PPS_recording_Rig_1']
-if RIG_NAME not in RIG_NAME_LIST:
-    raise ValueError(f"{RIG_NAME} not found in existing rig list")
+# RIG_NAME    = input("Enter rig name: ").strip()
+# RIG_NAME_LIST = ['PPS_training_Rig_3', 'PPS_training_Rig_2', 'PPS_training_Rig_1', 'PPS_recording_Rig_1']
+# if RIG_NAME not in RIG_NAME_LIST:
+#     raise ValueError(f"{RIG_NAME} not found in existing rig list")
+
+RIG_NAME_LIST = ['PPS_training_Rig_1', 'PPS_training_Rig_2', 'PPS_training_Rig_3', 'PPS_recording_Rig_1']
+print("\nAvailable rigs:")
+for i, opt in enumerate(RIG_NAME_LIST, start=1):
+    print(f"{i}. {opt}")
+
+try:
+    selected_index = int(input("Select rig number: ")) - 1
+    selected_option = RIG_NAME_LIST[selected_index]
+except Exception:
+    print("Invalid rig selection.")
+    sys.exit(1)
+
+RIG_NAME = selected_option
 
 # prompt for whether we're doring ephys recording and need to sync
 while True:
@@ -115,6 +131,8 @@ REWARD_DURATION_MS_LIST     = rig_conf["REWARD_DURATION_MS_LIST"]
 # experimental parameters
 RUNTIME_TIMEOUT_MINUTES         = exp_conf["RUNTIME_TIMEOUT_MINUTES"] 
 WHEEL_GAIN_DISTRIBUTION         = exp_conf["WHEEL_GAIN_DISTRIBUTION"] # "sample" or "choice"
+WHEEL_GAIN_USEBLOCK             = exp_conf["WHEEL_GAIN_USEBLOCK"] 
+WHEEL_GAIN_BLOCKSIZE            = exp_conf["WHEEL_GAIN_BLOCKSIZE"]
 WHEEL_GAIN_CM_PER_TICK_LIST     = tuple(exp_conf["WHEEL_GAIN_CM_PER_TICK_LIST"]) 
 WHEEL_GAIN_CM_PER_TICK_RANGE    = tuple(exp_conf["WHEEL_GAIN_CM_PER_TICK_RANGE"])
 #WHEEL_JITTER_COEF_LIST          = exp_conf["WHEEL_JITTER_COEF_LIST"] 
@@ -177,11 +195,18 @@ OBSTRUCTION_REGEN_TIME      = obstruction_conf["OBSTRUCTION_REGEN_TIME"]
 OBSTRUCTION_NUM             = obstruction_conf["OBSTRUCTION_NUM"]
 OBSTRUCTION_MIN_CENTER_DIST_X = obstruction_conf["OBSTRUCTION_MIN_CENTER_DIST_X"]
 
-REWARD_FUNCTION             = reward_conf["REWARD_FUNCTION"]
+REWARD_CONSECUTIVE          = reward_conf["REWARD_CONSECUTIVE"] 
+CONSECUTIVE_TOL             = reward_conf["CONSECUTIVE_TOL"] 
+N_REWARD_MIN                = reward_conf["N_REWARD_MIN"]
+N_REWARD_MAX                = reward_conf["N_REWARD_MAX"]
+#REWARD_FUNCTION             = reward_conf["REWARD_FUNCTION"]
 REWARD_TARGET               = reward_conf["REWARD_TARGET"] 
-REWARD_UNIT                 = reward_conf["REWARD_UNIT"]
-REWARD_TARGET_COEF_LIST     = reward_conf["REWARD_TARGET_COEF_LIST"] 
-
+#REWARD_UNIT                 = reward_conf["REWARD_UNIT"]
+#REWARD_TARGET_COEF_LIST     = reward_conf["REWARD_TARGET_COEF_LIST"] 
+REWARD_DELAY                = reward_conf["REWARD_DELAY"]
+FREE_REWARD                 = reward_conf["FREE_REWARD"]
+NREP_FREE                   = reward_conf["NREP_FREE"]
+FREE_SEGMENT                = reward_conf["FREE_SEGMENT"]
 # ==================================================================
 # PRBS parameters, only call when recording is on
 if DO_EPHYS:
@@ -242,11 +267,11 @@ ERROR_LOG_PATH = os.path.join(session_dir, 'error.txt')
 EXP_CONFIG_FILENAME = os.path.join(session_dir, f"exp_config_pps_behav_{mouse_name}_{date_str}_{current_time}.json")
 PARAMS_FILENAME = os.path.join(session_dir, f"exp_params_behav_{mouse_name}_{date_str}_{current_time}.mat")
 
-
+DISCONTINUOUS_CSV_FILENAME = os.path.join(session_dir, f"discontinuous_pps_behav_{mouse_name}_{date_str}_{current_time}.csv")
 
 reward_duration_dict   = dict(zip(REWARD_AMOUNT_LIST, REWARD_DURATION_MS_LIST))
-REWARD_TARGET_LIST     = [i * REWARD_UNIT for i in REWARD_TARGET_COEF_LIST]
-reward_target_dict     = dict(zip(SPAWN_GAUSS_CENTER_LIST, REWARD_TARGET_LIST))
+#REWARD_TARGET_LIST     = [i * REWARD_UNIT for i in REWARD_TARGET_COEF_LIST]
+#reward_target_dict     = dict(zip(SPAWN_GAUSS_CENTER_LIST, REWARD_TARGET_LIST))
 
 config_to_save = {
     "metadata": {
@@ -281,8 +306,30 @@ with open(EXP_CONFIG_FILENAME, "w") as f:
 # =========================
 # Define sampler of conditions
 # =========================
-def sample_from_list(nTrial, condition_list):
-    samples = np.random.choice(condition_list, size=nTrial)
+def sample_from_list(nTrial, condition_list, blockwise = False, blocksize = 100):
+    if blockwise:
+        n_blocks = math.ceil(nTrial / blocksize)
+        n_cond = len(condition_list)
+
+        # Balanced condition assignment across blocks
+        block_conditions = np.tile(
+            condition_list,
+            math.ceil(n_blocks / n_cond)
+        )[:n_blocks]
+
+        # Randomize block order
+        np.random.shuffle(block_conditions)
+
+        samples = []
+
+        for condition in block_conditions:
+            n_this_block = min(blocksize, nTrial - len(samples))
+            samples.extend([condition] * n_this_block)
+
+        samples = np.array(samples)
+
+    else:
+        samples = np.random.choice(condition_list, size=nTrial)
     return samples
 def sample_mixture_uniform(nTrial, low_high_bound, p_outlier, val_outlier):
     low_bound = low_high_bound[0]
@@ -317,13 +364,68 @@ def sample_mixture_exponential(nTrial, low_high_bound, lam, p_outlier, val_outli
 
     return samples
 
-def sample_mixed_gaussion_clamped(nTrials, gaussian_center_list, gaussian_sigma):
-    samples = np.empty(nTrials)
+# def sample_mixed_gaussion_clamped(nTrials, gaussian_center_list, gaussian_sigma, clamp_range):
+#     samples = np.empty(nTrials)
+
+#     return samples
+
+
+def sample_gaussian_around_centers(
+    nTrials,
+    gaussian_center_list,
+    gaussian_sigma,
+    out_of_range='resample',
+    max_invalid_frac = 0.1
+):
+    centers = np.random.choice(gaussian_center_list, size=nTrials)
+    samples = np.random.normal(loc = centers, scale = gaussian_sigma)
+
+    # if SUCCESS_EDGE_TOLERANCE_RANGE is None:
+    #     return samples
+
+
+    # Check initial invalid rate
+    
+    inreward = (samples >= SUCCESS_EDGE_TOLERANCE_RANGE[0]) & (samples <= SUCCESS_EDGE_TOLERANCE_RANGE[1])
+    inreward_frac = np.mean(inreward)
+    outofscreen = np.abs(samples) >= (SCREEN_WIDTH_CM / 2.0)
+    outofscreen_frac = np.mean(outofscreen)
+    if inreward_frac >= max_invalid_frac:
+        raise ValueError(
+            f"{inreward_frac:.1%} of samples fell in the reward zone on the first draw. "
+            f"Consider adjusting center_list or decreasing std. "
+        )
+    
+    if outofscreen_frac >= max_invalid_frac:
+        raise ValueError(
+            f"{outofscreen_frac:.1%} of samples fell outside of screen"
+            f"Consider adjusting center_list or decreasing std. "
+        )
+
+    invalid = inreward | outofscreen
+    if out_of_range == 'center':
+        samples[invalid] = centers[invalid]
+
+
+    elif out_of_range == 'resample':
+        while np.any(invalid):
+            print("Resampling initial position to make sure they don't start within the reward zone or out of the screen")
+            samples[invalid] = np.random.normal(
+                loc=centers[invalid],
+                scale = gaussian_sigma
+            )
+            inreward = (samples >= SUCCESS_EDGE_TOLERANCE_RANGE[0]) & (samples <= SUCCESS_EDGE_TOLERANCE_RANGE[1])
+            outofscreen = np.abs(samples) >= (SCREEN_WIDTH_CM / 2.0)
+            invalid = inreward | outofscreen
+        print("Done resampling")
+    elif out_of_range == "ignore":
+        return samples
+    else:
+        raise ValueError(
+            "out_of_range must be 'resample' or 'center'"
+        )
 
     return samples
-
-
-
 
 
 class TrialConditionSampler:
@@ -368,6 +470,8 @@ class TrialConditionSampler:
         ##### 6. gain/jitter of the wheel
         self.wheel_gain_distribution     = WHEEL_GAIN_DISTRIBUTION
         self.wheel_gain_list             = WHEEL_GAIN_CM_PER_TICK_LIST
+        self.wheel_gain_useblock         = WHEEL_GAIN_USEBLOCK
+        self.wheel_gain_blocksize        = WHEEL_GAIN_BLOCKSIZE 
         self.wheel_gain_range            = WHEEL_GAIN_CM_PER_TICK_RANGE
         self.no_wheel_jitter_portion     = NO_JITTER_PORTION
         self.wheel_jitter_coef           = WHEEL_JITTER_COEF
@@ -386,8 +490,10 @@ class TrialConditionSampler:
         match self.spawn_distribution:
             case "uniform":
                 new_init_x = sample_mixture_uniform(self.chunk_size, self.spawn_uniform_range , 0, 0)
+                new_init_signs = np.random.choice([-1, 1], size=new_init_x.shape)
+                new_init_x *= new_init_signs
             case "gaussian":
-                new_init_x = sample_mixed_gaussion_clamped(self.chunk_size, self.spawn_gauss_center_list, self.spawn_gauss_sigma_cm)
+                new_init_x = sample_gaussian_around_centers(self.chunk_size, self.spawn_gauss_center_list, self.spawn_gauss_sigma_cm)
             case "choice":
                 new_init_x = sample_from_list(self.chunk_size,  self.spawn_gauss_center_list )
         
@@ -402,7 +508,7 @@ class TrialConditionSampler:
                 new_ball_opacity = sample_from_list(self.chunk_size, self.ball_opacity_list)
             case "sample":
                 new_ball_opacity = sample_mixture_exponential(self.chunk_size, self.ball_opacity_range,
-                                    self.ball_opacity_lambda, self.high_opacity_portion, 1)
+                                    self.ball_opacity_lambda, self.high_opacity_portion, 1.0)
         
 
         ##### 4. falling speed of ball
@@ -430,12 +536,14 @@ class TrialConditionSampler:
         new_random_walk_bias[is_no_random_walk] = 0.0
         new_random_walk_std[is_no_random_walk]  = 0.0
 
-    
+        #####  make the random walk bias only away from the reward zone 
+        new_random_walk_bias_new = np.abs(new_random_walk_bias) * np.sign(new_init_x)
 
         ##### 6. gain/jitter of the wheel
         match self.wheel_gain_distribution:
             case "choice":
-                new_wheel_gain = sample_from_list(self.chunk_size, self.wheel_gain_list)
+        
+                new_wheel_gain = sample_from_list(self.chunk_size, self.wheel_gain_list, self.wheel_gain_useblock, self.wheel_gain_blocksize)
             case "sample":
                 new_wheel_gain = sample_mixture_uniform(self.chunk_size, self.wheel_gain_range,
                                                 0, 0)
@@ -447,8 +555,7 @@ class TrialConditionSampler:
         
 
     
-        ##### 7. make the random walk bias only away from the reward zone 
-        new_random_walk_bias_new = np.abs(new_random_walk_bias) * np.sign(new_init_x)
+   
 
 
 
@@ -514,6 +621,70 @@ def save_trial_sampler_to_mat(sampler, filename):
     # Save to .mat
     savemat(filename, data)
     print(f"[INFO] Saved sampler to {filename}")
+
+# ====================================
+# Define online analysis functions
+# ===================================
+def show_performance_online(completed_balls):
+    len_segment = 50
+    movement_threshold = 1.5 # cm
+    ### Every 50 balls, show number of rewarded, and average wheel movement
+    n_trials = len(completed_balls)
+    if n_trials == 0 or n_trials % len_segment != 0:
+        return
+
+    recent = completed_balls[-len_segment:]
+
+    nReward = sum(b['rewarded'] for b in recent)
+    nReward_total = sum(b['rewarded'] for b in completed_balls)
+    mean_movement = (
+        sum(b['movement_cm_abs'] for b in recent)
+        / len(recent)
+    )
+    nMoved = sum(
+        b['movement_cm_abs'] > movement_threshold
+        for b in recent
+    )
+    print("\n" + "=" * 50)
+    print(f"Trial {n_trials - len_segment} to Trial {n_trials}")
+    print(f"Num. rewarded (last {len_segment:d}): {nReward:d}")
+    print(f"Num. rewarded in total: {nReward_total:d}")
+    print(f"Num. moved (last {len_segment:d}): {nMoved:d}")
+    print(f"Mean movement (last {len_segment:d}): {mean_movement:.2f} cm")
+    print("=" * 50)
+def decide_free_reward_online(completed_balls, free_given_at):
+    give_free_reward = False
+    len_segment = FREE_SEGMENT
+    n_trials = len(completed_balls)
+    if n_trials == 0 or n_trials % len_segment != 0 or n_trials == free_given_at:
+        free_given_at = n_trials
+        return give_free_reward, free_given_at
+    recent = completed_balls[-len_segment:]
+    nReward = sum(b['rewarded'] for b in recent)
+    if nReward == 0:
+        give_free_reward = True
+        free_given_at = n_trials
+
+    return  give_free_reward, free_given_at
+
+           
+
+
+def decide_reward_repeat_online(completed_balls, n_reward_repeat_current):
+   
+
+    if len(completed_balls) == 0:
+        n_reward_repeat_next = N_REWARD_MIN
+        return n_reward_repeat_next
+  
+    if any(ball['rewarded'] for ball in completed_balls[-CONSECUTIVE_TOL:]):
+        n_reward_repeat_next = min(N_REWARD_MAX, n_reward_repeat_current + 1)
+       
+    else:
+        n_reward_repeat_next = N_REWARD_MIN
+
+ 
+    return n_reward_repeat_next
 # ===================================
 # Define PRBS helpers
 # ===================================
@@ -956,7 +1127,7 @@ def _open_arduino(timeout_s=STARTUP_WAIT_S):
 if ARDUINO_OPEN_ON_START and serial is not None:
     _open_arduino()
 
-def send_reward(duration_ms):
+def send_reward(duration_ms, nRep):
     global last_reward_ts, arduino
     now = perf_counter()
     if (now - last_reward_ts) < MIN_INTER_REWARD_S:
@@ -972,7 +1143,10 @@ def send_reward(duration_ms):
         if opened is None:
             return False
 
-    cmd = f"V {int(duration_ms)}\r\n"
+    # cmd = f"V {int(duration_ms)}\r\n"
+ 
+ 
+    cmd = f"t {duration_ms} {nRep} {REWARD_DELAY}\n"
     try:
         written = arduino.write(cmd.encode())
         try:
@@ -1258,13 +1432,13 @@ _log_max_balls = MAX_NUM_BALLS if (MAX_NUM_BALLS is not None) else _DEFAULT_LOG_
 if DO_EPHYS:
     header = ['prbs_val',
         'frame_idx', 't_global_s', 'window_deg_range', 'mouse_center_deg',
-        'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount',
+        'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount','reward_amount_single_rep','nRep_reward',
         'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'base_delta_cm', 'delta_cm', 'gain_applied',
     ]
 else:
     header = [
         'frame_idx', 't_global_s', 'window_deg_range', 'mouse_center_deg',
-        'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount',
+        'current_region', 'linear_velocity_cm_s', 'reward_state', 'reward_amount', 'reward_amount_single_rep','nRep_reward',
         'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'base_delta_cm', 'delta_cm', 'gain_applied',
     ]
 for i in range(1, _log_max_balls + 1):
@@ -1278,6 +1452,30 @@ next_spawn_time = None
 print("Starting loop with spawn modes — press ESC to quit.", flush=True)
 event.clearEvents()
 
+#################### Open the discontinuous csv log
+BALL_COLUMNS = [
+    'spawn_id',
+    'radius',
+    'init_x',
+    'opacity',
+    'y_speed',
+    'rand_walk_mean',
+    'rand_walk_std',
+    'rewarded',
+    'collided',
+    'movement_tick',
+    'movement_tick_abs',
+    'movement_cm',
+    'movement_cm_abs',
+    'ending_distance',
+    'reward_repeat',
+    'reward_amount'
+]
+
+ball_csv = open(DISCONTINUOUS_CSV_FILENAME, 'a', newline='')
+ball_writer = csv.DictWriter(ball_csv, fieldnames=BALL_COLUMNS,  extrasaction='ignore')
+ball_writer.writeheader()
+completed_balls = [] 
 # ============================
 # Stimulus pools for efficient drawing
 # ============================
@@ -1337,14 +1535,14 @@ global_spawn_id = 0
 sync_start_ts = None
 reward_active_until = 0.0
 reward_state_pulse_pending = False
-
+nRep_reward_previous = 0
 
 last_obstruction_regen_ts = None
 #### These two variables are for detecting stationary intervals
 delta_tick_history = []
 running_tick_sum = 0.0
 
-experiment_start_ts = perf_counter()
+
 if DO_EPHYS:
     #bpod = None           # Bpod instance (set in main_session)
     # Initialize Bpod now (inside main) so child processes don't create/initialize Bpod on import
@@ -1381,17 +1579,38 @@ try:
  
 
     new_ball = True
+    free_given_at = 0
     #initial_spawn(mouse_center_cm, trial_params)
-
+    experiment_start_ts = perf_counter()
     while True:
-        if new_ball == True:
-            trial_params = trial_param_sampler.next()
-            new_ball = False
-        #### Record current time
-        if RUNTIME_TIMEOUT_MINUTES and RUNTIME_TIMEOUT_MINUTES > 0:
+        
+        remove_indices = []
+        reward_sent_this_frame = False
+        reward_amount = 0.0
+        reward_amount_single_rep = 0.0
+        nRep_reward = 0
+        visible_ball_flags = []
+
+        if RUNTIME_TIMEOUT_MINUTES and RUNTIME_TIMEOUT_MINUTES > 0 and new_ball: # Shizhao liu 06/11, exist only during inter-ball intervall
             if (perf_counter() - experiment_start_ts) > (RUNTIME_TIMEOUT_MINUTES * 60.0):
                 print("[INFO] Runtime timeout reached — exiting.", flush=True)
                 break
+        if new_ball == True:
+           
+                
+            trial_params = trial_param_sampler.next()
+            new_ball = False
+            #### Calculate & Record wheel movement of each ball online
+            rewarded_online = False
+            ending_distance_online = False
+            ball_movement_tick_online = 0.0
+            ball_movement_tick_abs_online = 0.0
+            ball_movement_cm_online = 0.0
+            ball_movement_cm_abs_online = 0.0
+
+
+        #### Record current time
+ 
 
         now = clock.getTime()
         dt = now - last_time
@@ -1454,6 +1673,12 @@ try:
         raw_target_delta = base_delta_cm * gain_applied
         delta_cm = apply_gain_function_for_region(current_region_name, raw_target_delta, dt_clamped, regions.get(current_region_name, {}))
 
+        #### Calculate & Record wheel movement of each ball online
+        ball_movement_tick_online += delta_ticks
+        ball_movement_tick_abs_online = abs(delta_ticks)
+        ball_movement_cm_online += delta_cm 
+        ball_movement_cm_abs_online += abs(delta_cm)
+        
         if abs(delta_cm) > MAX_MOVE_PER_FRAME_CM:
             delta_cm = 0.0
             delta_ticks = 0
@@ -1515,21 +1740,41 @@ try:
         if running_tick_sum < STATIONARY_TOLERANCE and (perf_counter() - experiment_start_ts) > (STATIONARY_INTERVAL / 1000): ### stationary enough in the last time window
             wheel_is_stationary = True
 
+        if next_spawn_time is not None and FREE_REWARD:
+            if ts >= next_spawn_time - SPAWN_INTERVAL_RANGE[0] / 2:
+                give_free_reward, free_given_at = decide_free_reward_online(completed_balls, free_given_at)
+                if give_free_reward:
+                    reward_amount_single_rep = REWARD_TARGET                           
+                    open_t = reward_duration_dict[reward_amount_single_rep]                    
+                    reward_amount = reward_amount_single_rep * NREP_FREE
+                    if send_reward(open_t, NREP_FREE):
+                        reward_sent_this_frame = True
+                        reward_active_until = perf_counter() + (open_t / 1000.0)
+                        reward_state_pulse_pending = True
+                      
+
+
         if next_spawn_time is not None and ts >= next_spawn_time:
             # spawn_ball_ts(ts, win_start, window_intervals)
+           
+                        #nRep_reward_previous = nRep_reward
             if (not SPAWN_ONLY_STATIONARY) | (SPAWN_ONLY_STATIONARY and wheel_is_stationary):
                 spawn_ball_ts(ts, win_start, window_intervals, trial_params)
-                #new_ball = True
+               
+                
             
 
  
         for obs in obstructions:
             obs['hit'] = 0
 
-        remove_indices = []
-        reward_sent_this_frame = False
-        reward_amount = 0.0
-        visible_ball_flags = []
+        # remove_indices = []
+        # reward_sent_this_frame = False
+        # reward_amount = 0.0
+        # reward_amount_single_rep = 0.0
+        # nRep_reward = 0
+
+        # visible_ball_flags = []
 
         # ===========================================
         # Detect if balls hit the bottom of the screen edge
@@ -1569,6 +1814,8 @@ try:
 
             #if collided_with_obstruction:
             if collided_with_obstruction or collided_with_screen_edge:
+                rewarded_online = False
+                collided_online = True
                 remove_indices.append(bi)
                 if not MULTIPLE_BALLS:
                     next_spawn_time = ts + random.uniform(*SPAWN_INTERVAL_RANGE)
@@ -1579,13 +1826,16 @@ try:
             reach_bottom = 0
             if ball['y_cm'] <= bottom_threshold:
                 reach_bottom = 1
-                
+          
                 if horiz_in:
+                    
+                    collided_online = False
                     drawn_x = world_to_screen_x(ball['world_x_cm'], win_start, SCREEN_WIDTH_CM, SPACE_WIDTH_CM)
                     #tolerance = SUCCESS_EDGE_TOLERANCE_MULT * CIRCLE_RADIUS_CM
                     ### By shizhao liu 03/30/2026, change the way to decide whether balls are in reward zone
                     #if 'SUCCESS_EDGE_TOLERANCE_RANGE' in globals():
                     is_in_zone = drawn_x >= SUCCESS_EDGE_TOLERANCE_RANGE[0] and drawn_x <= SUCCESS_EDGE_TOLERANCE_RANGE[1]
+                    ending_distance_online = drawn_x
                     # elif 'SUCCESS_EDGE_TOLERANCE_MULT' in globals():
                     #     tolerance = SUCCESS_EDGE_TOLERANCE_MULT * ball['radius']
                     #     is_in_zone  = abs(drawn_x) <= tolerance
@@ -1593,21 +1843,27 @@ try:
                     #     raise ValueError("Reward zone not specified")
 
                     if is_in_zone and (not reward_sent_this_frame):
-                        match REWARD_FUNCTION:
-                            case "list":
-                                reward_amount = reward_target_dict[ball['init_x']]
+                        rewarded_online = True
+                        # match REWARD_FUNCTION:
+                        #     case "list":
+                        #         reward_amount_single_rep = reward_target_dict[ball['init_x']]
                               
-                            case "single":
-                                reward_amount = REWARD_TARGET
+                            # case "single":
+                        reward_amount_single_rep = REWARD_TARGET
                             
-                        open_t = reward_duration_dict[reward_amount]
+                        open_t = reward_duration_dict[reward_amount_single_rep]
 
-                        
-                        if send_reward(open_t):
+                        if not REWARD_CONSECUTIVE:
+                            nRep_reward = 1
+                        else:
+                            nRep_reward = decide_reward_repeat_online(completed_balls, nRep_reward_previous)
+                        reward_amount = reward_amount_single_rep * nRep_reward
+                        if send_reward(open_t, nRep_reward):
                             
                             reward_sent_this_frame = True
                             reward_active_until = perf_counter() + (open_t / 1000.0)
                             reward_state_pulse_pending = True
+                            nRep_reward_previous = nRep_reward
                             # if DO_EPHYS:
                             #     send_reward_pulse_hw_nonblocking()
 
@@ -1776,7 +2032,9 @@ try:
                     (current_region_name if current_region_name is not None else ''),
                     f"{scenery_speed_cm_s:.3f}",
                     reward_state_now,
-                    reward_amount
+                    reward_amount,
+                    reward_amount_single_rep,
+                    nRep_reward
                 ]
         else:
             row = [
@@ -1787,7 +2045,9 @@ try:
                 (current_region_name if current_region_name is not None else ''),
                 f"{scenery_speed_cm_s:.3f}",
                 reward_state_now,
-                reward_amount
+                reward_amount,
+                reward_amount_single_rep,
+                nRep_reward
             ]
         row += enc_cols
         row.append(gain_col)
@@ -1803,6 +2063,23 @@ try:
         #### Remove finished balls (reached bottom or touched the screen edge)
         #### By Shizhao Liu 02/26/26: moved this after logging so that the last state of a ball is saved
         for bi in sorted(remove_indices, reverse=True):
+            ball = balls[bi]
+            ball['rewarded'] = rewarded_online
+            ball['collided'] = collided_online
+            ball['movement_tick'] = ball_movement_tick_online
+            ball['movement_tick_abs'] = ball_movement_tick_abs_online
+            ball['movement_cm'] = ball_movement_cm_online
+            ball['movement_cm_abs'] = ball_movement_cm_abs_online
+            ball['ending_distance'] = ending_distance_online
+            ball['reward_repeat']  = nRep_reward
+            ball['reward_amount'] = reward_amount
+
+
+            completed_balls.append(ball)
+            ball_writer.writerow(ball)
+            ball_csv.flush()   # ensure data is written to disk
+            
+            show_performance_online(completed_balls)
             balls.pop(bi)
             new_ball = True
 
@@ -1834,6 +2111,8 @@ finally:
     try:
         sync_f.flush()
         sync_f.close()
+
+        ball_csv.close()
     except Exception:
         pass
 
@@ -1858,10 +2137,15 @@ finally:
         except Exception:
             pass
     # ==== Count and print how much reward the animal got
-    [total_reward, n_rewarded_trials, has_amount] = count_reward(SYNC_LOG_FILENAME)
+    [total_reward, nRewarded_total, has_amount] = count_reward(SYNC_LOG_FILENAME)
+    nReward_trials = sum(b['rewarded'] for b in completed_balls)
+    reward_amount_task = sum(b['reward_amount'] for b in completed_balls)
     #if has_amount:
     print(f"Total reward amount: {total_reward}")
-    print(f"Number of rewarded trials: {n_rewarded_trials}")
+    print(f"Reward amount from task: {reward_amount_task}")
+    print(f"Reward amount free: {total_reward - reward_amount_task}")
+    print(f"Number of rewarded trials: {nReward_trials}")
+    print(f"Number of free reward: {nRewarded_total - nReward_trials}")
     # elseif len()
     #     print(f"Total reward amount: {n_rewarded_trials} * {REWARD_TARGET} = {n_rewarded_trials * REWARD_TARGET}")
 

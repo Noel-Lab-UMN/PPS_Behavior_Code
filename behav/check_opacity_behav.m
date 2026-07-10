@@ -5,18 +5,20 @@ global PPS_global
 generate_PPS_global();
 %%
 
-subjectCode  = 'GD_1_red'; 
-plotIndividual = false;
-switch subjectCode
-    case 'LSZ_practice_5_violet'
-        exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};
-    case 'GD_1_red'
-        exp_date_list = {'20260506'};
-end
+subjectCode  = 'GD_5_grey'; 
+%plotIndividual = true;
+% switch subjectCode
+%     case 'LSZ_practice_5_violet'
+%         exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};
+%     case 'GD_1_red'
+%         exp_date_list = {'20260506'};
+% end
+
+
 
 data_folder = fullfile('../../results/behav/pps_processed/',subjectCode);
 
-eval(sprintf('session_list_all = PPS_global.%s.session_list.new_params;',subjectCode));
+eval(sprintf('exp_date_list = PPS_global.%s.session_list.new_params;',subjectCode));
 
 nPermute = 100;
 colors_list = get(groot, 'defaultAxesColorOrder');
@@ -69,7 +71,7 @@ for i = 1:numel(exp_date_list)
 
         
         % % z-score per condition
-        real_values.p_reward_real   = p_rewarded_moved(n);
+        real_values.p_reward_moved   = p_rewarded_moved(n);
         real_values.target_moved    = target_distance_moved(n);
         real_values.target_reward   = target_distance_rewarded(n);
         [zscore_p_reward(n), zscore_target_moved(n), zscore_target_reward(n)] =  util_pps.compute_z_score_condition(behav_data, real_values, idx, nPermute, EXP_CONFIG);
@@ -178,7 +180,7 @@ sgtitle(subjectCode, 'fontweight', 'bold', 'fontsize', 18, 'interpreter', 'none'
 
 
 %%
-subjectCode  = 'LSZ_practice_5_violet'; 
+subjectCode  = 'GD_5_grey'; 
 
 switch subjectCode
     case 'LSZ_practice_5_violet'
@@ -188,6 +190,9 @@ switch subjectCode
     case 'GD_1_red'
         exp_date_list = {'20260506'};
         init_x_list = [-15,15];
+    case {'GD_4_mint';'GD_5_grey'}
+        exp_date_list = {'20260528'};
+        init_x_list = [-15,-10,10, 15];
 end
 
 %exp_date_list = {'20260415';'20260422';'20260423';'20260424';'20260428';'20260429';'20260430';'20260501'};

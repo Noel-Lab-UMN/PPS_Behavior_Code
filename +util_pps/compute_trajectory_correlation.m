@@ -1,8 +1,8 @@
-function [r_all, r_single] = compute_trajectory_correlation(behav_data, idx, doPlot)
+function [r_all, r_single, x_trajectory_ideal, x_trajectory_real] = compute_trajectory_correlation(behav_data, idx, doPlot)
 
 nTrial = numel(idx);
 [x_trajectory_ideal,x_trajectory_real] = deal(cell(nTrial,1));
-idx_all = cell(nTrial,1);
+i_frame_all = cell(nTrial,1);
 idx_offset = 0;
 for n = 1:nTrial
     k = idx(n);
@@ -27,9 +27,9 @@ for n = 1:nTrial
     x_rel_init = behav_data(k).initial_x_rel_cm + x_init_pos;
     x_trajectory_ideal{n} = linspace(x_init_pos, x_rel_init, nFrame)';
 
-    idx_all{n} = idx_offset + [1:numel(x_trajectory_ideal{n})]';
+    i_frame_all{n} = idx_offset + [1:numel(x_trajectory_ideal{n})]';
 
-    idx_offset = idx_all{n}(end);
+    idx_offset = i_frame_all{n}(end);
 end
 
 
@@ -50,10 +50,10 @@ if doPlot
     hold on
     colors_list = get(groot, 'defaultAxesColorOrder');
    % T = numel(x_trajectory_ideal);
-    h(1) = plot(cat(1, idx_all{:}), cat(1, x_trajectory_ideal{:}), 'color', colors_list(1,:));
-    h(2) = plot(cat(1, idx_all{:}), cat(1, x_trajectory_real{:}), 'color', [0.5,0.5,0.5]);
-    for t = 1:numel(idx_rewarded)
-        h(3) = plot( idx_all{idx_rewarded(t)},  x_trajectory_real{idx_rewarded(t)}, 'color', 'red');
+    h(1) = plot(cat(1, i_frame_all{:}), cat(1, x_trajectory_ideal{:}), 'color', colors_list(1,:));
+    h(2) = plot(cat(1, i_frame_all{:}), cat(1, x_trajectory_real{:}), 'color', [0.5,0.5,0.5]);
+    for t = 1:numel(i_frame_all)
+        h(3) = plot(i_frame_all{idx(t)},  x_trajectory_real{idx(t)}, 'color', 'red');
     end
     plot(idx_end_ideal, x_end_ideal, 'o', 'color', colors_list(1,:))
     plot(idx_end_real, x_end_real, 'o', 'color', [0.5,0.5,0.5])

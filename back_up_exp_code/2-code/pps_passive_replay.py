@@ -12,7 +12,7 @@ import glob
 import traceback
 from time import perf_counter
 from datetime import datetime
-
+import sys
 
 import json
 
@@ -44,10 +44,24 @@ mouse_name  = input("Enter mouse name (short, no spaces): ").strip()
 if not mouse_name:
     mouse_name = "mouseUNK"
 
-RIG_NAME    = input("Enter rig name: ").strip()
-RIG_NAME_LIST = ['PPS_training_Rig_3', 'PPS_training_Rig_2','PPS_training_Rig_1', 'PPS_recording_Rig_1']
-if RIG_NAME not in RIG_NAME_LIST:
-    raise ValueError(f"{RIG_NAME} not found in existing rig list")
+# RIG_NAME    = input("Enter rig name: ").strip()
+# RIG_NAME_LIST = ['PPS_training_Rig_3', 'PPS_training_Rig_2','PPS_training_Rig_1', 'PPS_recording_Rig_1']
+# if RIG_NAME not in RIG_NAME_LIST:
+#     raise ValueError(f"{RIG_NAME} not found in existing rig list")
+
+RIG_NAME_LIST = ['PPS_training_Rig_1', 'PPS_training_Rig_2', 'PPS_training_Rig_3', 'PPS_recording_Rig_1']
+print("\nAvailable rigs:")
+for i, opt in enumerate(RIG_NAME_LIST, start=1):
+    print(f"{i}. {opt}")
+
+try:
+    selected_index = int(input("Select rig number: ")) - 1
+    selected_option = RIG_NAME_LIST[selected_index]
+except Exception:
+    print("Invalid rig selection.")
+    sys.exit(1)
+
+RIG_NAME = selected_option
 
 # prompt for whether we're doring ephys recording and need to sync
 while True:
@@ -120,6 +134,7 @@ SPACE_DEGREES               = exp_conf["SPACE_DEGREES"]
 
 MOVEMENT_THRESHOLD          = exp_conf["MOVEMENT_THRESHOLD"] 
 
+REWARD_DELAY                = reward_conf["REWARD_DELAY"]
 
 # REWARD_AMOUNT_LIST          = reward_conf["REWARD_AMOUNT_LIST"] 
 
@@ -215,12 +230,12 @@ sync_f              = open(SYNC_LOG_FILENAME, 'w', newline='')
 sync_writer         = csv.writer(sync_f)
 if DO_EPHYS:
     header = ['prbs_val',
-        'frame_idx', 't_global_s', 'reward_state','reward_amount',
+        'frame_idx', 't_global_s', 'reward_state','reward_amount','reward_amount_single_rep','nRep_reward',
         'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'delta_cm',
         'running_tick_sum','wheel_is_stationary']
 else:
     header = [
-        'frame_idx', 't_global_s', 'reward_state','reward_amount',
+        'frame_idx', 't_global_s', 'reward_state','reward_amount','reward_amount_single_rep','nRep_reward',
         'enc_ticks', 'delta_ticks_raw', 'delta_ticks_corrected', 'delta_cm',
         'running_tick_sum','wheel_is_stationary']
 header.append(f"slot{1}")
@@ -455,6 +470,8 @@ def parse_sync_log(csv_file_name, column_name='slot_1', X_UNIT = X_UNIT, file_id
     # ===== NEW LINES =====
     ball_data['reward_state'] = df.loc[ball_data.index, 'reward_state']
     ball_data['reward_amount'] = df.loc[ball_data.index, 'reward_amount']
+    ball_data['reward_amount_single_rep'] =  df.loc[ball_data.index, 'reward_amount_single_rep']
+    ball_data['nRep_reward'] = df.loc[ball_data.index, 'nRep_reward']
 
     # new
     ball_data['source_file'] = os.path.basename(csv_file_name)
@@ -541,7 +558,9 @@ def wait_for_stationary_and_log_between_spawns():
             sync_start_ts = perf_counter()
         t_global = f"{(perf_counter() - sync_start_ts):.6f}"
 
-        reward_amount = 0   
+        reward_amount = 0.0
+        reward_amount_single_rep = 0.0
+        nRep_reward = 0
         if DO_EPHYS:
             with prbs_shared.get_lock():
                 prbs_val = int(prbs_shared.value)
@@ -550,7 +569,9 @@ def wait_for_stationary_and_log_between_spawns():
                 frame_idx,
                 t_global,
                 reward_state_now,
-                reward_amount
+                reward_amount,
+                reward_amount_single_rep,
+                nRep_reward
             ]
         else:
         # Start with the header
@@ -558,7 +579,9 @@ def wait_for_stationary_and_log_between_spawns():
                 frame_idx,
                 t_global,
                 reward_state_now,
-                reward_amount
+                reward_amount,
+                reward_amount_single_rep,
+                nRep_reward
             ]
 
         log_row += enc_cols
@@ -630,7 +653,8 @@ def detect_wheel(encoder, reference_ticks, gain_applied = WHEEL_GAIN_CM_PER_TICK
 #         print(f"[TIMING] {label}: {dt_s:.4f}s{suffix}", flush=True)
 
 ### === send reward 
-def send_reward(duration_ms):
+def send_reward(duration_ms, nRep):
+#def send_reward(duration_ms):
     global last_reward_ts, arduino
     t_fn_start = perf_counter()
     now = t_fn_start
@@ -650,10 +674,11 @@ def send_reward(duration_ms):
             print(f"[REWARD ERROR] Failed to open Arduino on {ARDUINO_PORT}", flush=True)
             return False
 
-    cmd = f"V {int(duration_ms)}\r\n".encode()
+    #cmd = f"V {int(duration_ms)}\r\n".encode()
+    cmd = f"t {duration_ms} {nRep} {REWARD_DELAY}\n"
     try:
         t_write_start = perf_counter()
-        written = arduino.write(cmd)
+        written = arduino.write(cmd.encode())
         #timing_print("arduino.write", perf_counter() - t_write_start, extra=f"bytes={written}")
 
         t_wait_start = perf_counter()
@@ -839,6 +864,11 @@ try:
             #frame_idx, reward_state_pulse_pending = wait_for_stationary_and_log_between_spawns(win, encoder, sync_writer, sync_f, frame_idx,reward_state_pulse_pending, sync_start_ts) 
             wait_for_stationary_and_log_between_spawns()
             spawn_idx += 1
+            if spawn_idx % 50 == 0:
+                print("\n" + "=" * 50)
+                print(f"Trial {spawn_idx} out of Trial {len(spawn_groups)}")
+                print("=" * 50)
+
             ### save replay state each time we finish replaying a ball
             save_replay_state(
                 REPLAY_STATE_FILENAME,
@@ -883,6 +913,8 @@ try:
         # is_rewarded
         is_rewarded = row.reward_state
         reward_amount = row.reward_amount
+        reward_amount_single_rep = row.reward_amount_single_rep
+        nRep_reward = row.nRep_reward
 
         
         # draw
@@ -915,8 +947,10 @@ try:
             # Whether to give reward
             # this spawn was rewarded in the original experiment
             if is_rewarded and (not reward_sent_this_frame):
-                open_t = reward_duration_dict[reward_amount]
-                if send_reward(open_t):
+
+                open_t = reward_duration_dict[reward_amount_single_rep]
+                if send_reward(open_t, nRep_reward):
+                #if send_reward(open_t):
                     reward_sent_this_frame = True
                     reward_active_until = perf_counter() + (open_t / 1000.0)
                     reward_state_pulse_pending = True
@@ -955,7 +989,9 @@ try:
                 frame_idx,
                 t_global,
                 reward_state_now,
-                reward_amount
+                reward_amount,
+                reward_amount_single_rep,
+                nRep_reward
             ]
         else:
         # Start with the header
@@ -963,7 +999,9 @@ try:
                 frame_idx,
                 t_global,
                 reward_state_now,
-                reward_amount
+                reward_amount,
+                reward_amount_single_rep,
+                nRep_reward
             ]
 
         # append to rows

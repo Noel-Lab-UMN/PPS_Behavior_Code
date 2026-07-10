@@ -170,13 +170,18 @@ for c = 1:numel(opacityLevels)
 
     meanPSTH = mean(psthHz, 1, 'omitnan');
     semPSTH = std(psthHz, [], 1, 'omitnan') / sqrt(size(psthHz, 1));
+    
+    smoothWin = 5;  % number of bins; 5 bins x 20 ms = 100 ms
 
-    plot(tBin, meanPSTH, 'LineWidth', 2, ...
+    meanPSTH_smooth = smoothdata(meanPSTH, 'gaussian', smoothWin);
+    semPSTH_smooth  = smoothdata(semPSTH,  'gaussian', smoothWin);
+
+    plot(tBin, meanPSTH_smooth, 'LineWidth', 2, ...
         'DisplayName', sprintf('Opacity = %.2f', thisOpacity),'Color',colors_list(c,:));
 
     % Optional SEM shading
     fill([tBin fliplr(tBin)], ...
-         [meanPSTH - semPSTH fliplr(meanPSTH + semPSTH)], 1,...
+         [meanPSTH_smooth - semPSTH_smooth fliplr(meanPSTH_smooth + semPSTH_smooth)], 1,...
          'facecolor',colors_list(c,:), 'FaceAlpha', 0.12, 'EdgeColor', 'none', ...
          'HandleVisibility', 'off');
 end

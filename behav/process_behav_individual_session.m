@@ -7,15 +7,15 @@ close all
 global PPS_global
 generate_PPS_global()
 %% experiment date and subject code
-%subjectCode_list = PPS_global.subjectCode_list_of_interest;
-subjectCode_list = {'GD_5_grey'};
+subjectCode_list = PPS_global.subjectCode_list_of_interest;
+%subjectCode_list = {'GD_4_mint'};
 for i_sub  = 1:numel(subjectCode_list)
     subjectCode     = subjectCode_list{i_sub};
 
     do_replace      = false; 
     doPlot          = false;
 
-    eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+    eval(sprintf('session_list = PPS_global.%s.session_list.all;',subjectCode));
     %session_list = {'20260422';'20260423';'20260424'};
     %session_list = {'20260424'};
     
@@ -27,7 +27,7 @@ for i_sub  = 1:numel(subjectCode_list)
      for n = 1:numel(session_list)
         
         exp_date    = session_list{n};
-        fprintf('Processing %s:%s \n',subjectCode, exp_date)
+        
         results_save_name       = fullfile(save_folder,['behav_stats_PPS_',subjectCode,'_',exp_date,'.mat']);
         data_save_name          = fullfile(save_folder,['behav_data_PPS_',subjectCode,'_',exp_date,'.mat']);
         %fig_stats_save_name = fullfile(save_folder,['fig_stats_PPS_',subjectCode,'_',exp_date,'.png']);
@@ -35,6 +35,7 @@ for i_sub  = 1:numel(subjectCode_list)
         if isfile(results_save_name) & isfile(data_save_name) & ~do_replace 
             continue
         end
+        fprintf('Processing %s:%s \n',subjectCode, exp_date)
         %% read the json file and the csv file
         meta_folder = fullfile(sprintf('../../meta_data_local/%s',subjectCode), [subjectCode,'_',exp_date]);
         EXP_CONFIG = util_pps.read_json_config(meta_folder, subjectCode, exp_date);

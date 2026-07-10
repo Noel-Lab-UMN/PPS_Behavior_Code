@@ -6,6 +6,8 @@ close all
 %%%% (1) percent correct relative to chance level
 %%%% (2) MAD
 %%%% (3) percent correct conditioned on initial left/right. any bias?
+global PPS_global
+generate_PPS_global();
 %%
 subjectCode = 'GD_1_red';
 save_folder = fullfile('../../results/behav/pps_processed',subjectCode);
@@ -14,10 +16,9 @@ if ~isfolder(fig_save_folder)
     mkdir(fig_save_folder);
 end
 
-global PPS_global
-generate_PPS_global();
 
-eval(sprintf('session_list = PPS_global.%s.session_list.initial_all;',subjectCode));
+
+eval(sprintf('session_list = PPS_global.%s.session_list.new_params;',subjectCode));
 
 behav_results_summary = util_pps.load_behav_results_summary(save_folder, subjectCode, session_list);
 plotOptions.session_list = session_list;

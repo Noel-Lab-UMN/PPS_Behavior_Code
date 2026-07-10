@@ -290,12 +290,26 @@ class RigDBClient:
         if not data.get("found"):
             return None
 
-        s = data.get("session") or {}   
+        s = data.get("session") or {}
+
+        # # Debugging: show exactly what keys the server returned
+        # print("[db debug] last session keys:", sorted(s.keys()))
+        # print("[db debug] last session:", s)
+
+        params = s.get("parameters") or {}
+        metadata = params.get("metadata") or {}
+
+        returned_experiment_name = (
+            s.get("experiment_name")
+            or metadata.get("experiment_name")
+            or experiment_name
+        )
+
         return SessionRow(
             session_id=int(s["session_id"]),
             mouse_id=int(s["mouse_id"]),
-            experiment_name = str(s["experiment_name"]),
             experiment_id=int(s["experiment_id"]),
+            experiment_name=str(returned_experiment_name),
             rig_id=(int(s["rig_id"]) if s.get("rig_id") is not None else None),
             experimenter_id=(int(s["experimenter_id"]) if s.get("experimenter_id") is not None else None),
             experimenter_name=(str(s["experimenter_name"]) if s.get("experimenter_name") is not None else None),
@@ -308,6 +322,23 @@ class RigDBClient:
             next_session_parameters=s.get("next_session_parameters"),
             links=s.get("links"),
         )
+
+        # return SessionRow(
+        #     session_id=int(s["session_id"]),
+        #     mouse_id=int(s["mouse_id"]),
+        #     experiment_name=str(returned_experiment_name),
+        #     rig_id=(int(s["rig_id"]) if s.get("rig_id") is not None else None),
+        #     experimenter_id=(int(s["experimenter_id"]) if s.get("experimenter_id") is not None else None),
+        #     experimenter_name=(str(s["experimenter_name"]) if s.get("experimenter_name") is not None else None),
+        #     session_type_id=(int(s["session_type_id"]) if s.get("session_type_id") is not None else None),
+        #     session_type_name=(str(s["session_type_name"]) if s.get("session_type_name") is not None else None),
+        #     session_at=str(s["session_at"]),
+        #     is_analyzed=bool(s.get("is_analyzed")),
+        #     parameters=s.get("parameters"),
+        #     performance=s.get("performance"),
+        #     next_session_parameters=s.get("next_session_parameters"),
+        #     links=s.get("links"),
+        # )
 
     def create_session(
         self,

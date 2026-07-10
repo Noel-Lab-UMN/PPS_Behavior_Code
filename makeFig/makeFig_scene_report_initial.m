@@ -22,8 +22,11 @@ if doThis
             sgtitle_str = 'Example animal 1';
            
         case 'GD_1_red'
-            eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+            eval(sprintf('session_list = PPS_global.%s.session_list.initial_all;',subjectCode));
             sgtitle_str = 'Example animal 2';
+        case 'GD_4_mint'
+            eval(sprintf('session_list = PPS_global.%s.session_list.initial;',subjectCode));
+            sgtitle_str = 'Example animal 3';
     end
     save_name = fullfile(figure_folder,sprintf('timecourses_%s', subjectCode));
     behav_results_summary = util_pps.load_behav_results_summary(fullfile(data_folder, subjectCode), subjectCode, session_list);
@@ -95,9 +98,9 @@ for i = 1:2
 end
 end
 %% 4. Example trajectories
-doThis = 0;
+doThis = 1;
 if doThis
-subjectCode = 'GD_1_red';
+subjectCode = 'LSZ_practice_5_violet';
 switch subjectCode
     case 'LSZ_practice_5_violet'
         dateStr_early   = '20260309';
@@ -162,7 +165,7 @@ end
 
 doThis = 1;
 if doThis
-    subjectCode = 'GD_1_red';
+    subjectCode = 'LSZ_practice_5_violet';
     %data_folder = fullfile('../../results/behav/pps_processed',subjectCode);
     
     switch subjectCode
